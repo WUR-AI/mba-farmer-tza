@@ -16,7 +16,7 @@ from itertools import product
 
 NC_DIR = '/data/mba-tza/agera5/ncfiles'
 
-dates = pd.date_range('2024-01-01', '2024-12-31', freq='D')
+dates = pd.date_range('2023-06-01', '2024-12-31', freq='D')
 variables = [
     'Temperature-Air-2m-Mean-24h', 'Temperature-Air-2m-Max-Day-Time',
     'Temperature-Air-2m-Min-Night-Time', 'Vapour-Pressure-Mean', 'Precipitation-Flux',
