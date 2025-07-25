@@ -30,17 +30,17 @@ for variable in variables:
     for day in tqdm(dates):
         nc_path = f'{NC_DIR}/{day.year}/{variable}/{variable}_C3S-glob-agric_AgERA5_{day.strftime("%Y%m%d")}_final-v1.1.nc'
         ds = xr.open_dataset(nc_path)
-        current_day_data = ds[variable.replace('-','_')].sel(
+        current_day_data = ds[variable.replace('-','_')].interp(
             lon=xr.DataArray(points.geometry.x.values, dims="point"),
             lat=xr.DataArray(points.geometry.y.values, dims="point"),
-            method="nearest"
+            method="linear"
         ).values[0]
         ds.close()
         for i, idx in enumerate(points.index):
             data[(idx, day)].update({variable: current_day_data[i]})
         
 df = pd.DataFrame.from_dict(data, orient='index')
-df.to_pickle('data/external-covs/weather-data-daily-2024.pkl')
+df.to_pickle('data/external-covs/weather-data-daily-2024-linearinterp.pkl')
 print()
 
 
