@@ -23,6 +23,8 @@ variables = [
     'Solar-Radiation-Flux', 'Wind-Speed-10m-Mean'
 ]
 points = gpd.read_file('data/geo/points.geojson')
+points = points.set_index('fieldID')
+points = points.loc[~points.index.duplicated(keep='first')]
 points = points.to_crs(4326)
 
 data = {(idx, day): {} for idx, day in product(points.index, dates)}

@@ -32,6 +32,8 @@ for prop in props_to_download[:]:
     metadata[prop] = meta
 
 points = gpd.read_file('data/geo/points.geojson')
+points = points.set_index('fieldID')
+points = points.loc[~points.index.duplicated(keep='first')]
 values = {i: {} for i in points.index}
 # Extract the data for a all points
 for prop, rast_path in rasters.items():
