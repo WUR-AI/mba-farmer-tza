@@ -15,6 +15,8 @@ import geopandas as gpd
 from itertools import product
 
 NC_DIR = '/data/mba-tza/agera5/ncfiles'
+DATA_SAVE_DIR = f'/data/mba-tza/external-covs'
+GEO_DATA_DIR = f'/data/mba-tza/geo'
 
 dates = pd.date_range('2023-06-01', '2024-12-31', freq='D')
 variables = [
@@ -22,7 +24,7 @@ variables = [
     'Temperature-Air-2m-Min-Night-Time', 'Vapour-Pressure-Mean', 'Precipitation-Flux',
     'Solar-Radiation-Flux', 'Wind-Speed-10m-Mean'
 ]
-points = gpd.read_file('data/geo/points.geojson')
+points = gpd.read_file(f'{GEO_DATA_DIR}/points.geojson')
 points = points.set_index('fieldID')
 points = points.loc[~points.index.duplicated(keep='first')]
 points = points.to_crs(4326)
@@ -42,7 +44,7 @@ for variable in variables:
             data[(idx, day)].update({variable: current_day_data[i]})
         
 df = pd.DataFrame.from_dict(data, orient='index')
-df.to_pickle('data/external-covs/weather-data-daily-2024-linearinterp.pkl')
+df.to_pickle(f'{DATA_SAVE_DIR}/weather-data-daily-2024-linearinterp.pkl')
 print()
 
 

@@ -17,7 +17,9 @@ import os
 
 # Download ISDA rasters
 RASTER_DIR = f'/data/mba-tza/isda'
-bounding_box = gpd.read_file('data/geo/region-bounding-box.geojson')
+DATA_SAVE_DIR = f'/data/mba-tza/external-covs'
+GEO_DATA_DIR = f'/data/mba-tza/geo'
+bounding_box = gpd.read_file(f'{GEO_DATA_DIR}/region-bounding-box.geojson')
 minx, miny, maxx, maxy = bounding_box.to_crs(4326).total_bounds
 
 props_to_download = [
@@ -31,7 +33,7 @@ for prop in props_to_download[:]:
     rasters[prop] = rst_path
     metadata[prop] = meta
 
-points = gpd.read_file('data/geo/points.geojson')
+points = gpd.read_file(f'{GEO_DATA_DIR}/points.geojson')
 points = points.set_index('fieldID')
 points = points.loc[~points.index.duplicated(keep='first')]
 values = {i: {} for i in points.index}
@@ -53,8 +55,8 @@ for prop, rast_path in rasters.items():
         })
 
 values = pd.DataFrame.from_dict(values, orient='index')
-if not os.path.exists('data/external-covs'):
-    os.mkdir('data/external-covs')
-values.to_pickle('data/external-covs/soil-data.pkl')
+if not os.path.exists(DATA_SAVE_DIR):
+    os.mkdir(DATA_SAVE_DIR)
+values.to_pickle(f'{DATA_SAVE_DIR}/soil-data.pkl')
 # new_points = points.join(values)
 # print()
