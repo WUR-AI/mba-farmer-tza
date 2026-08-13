@@ -10,7 +10,9 @@ PDFS = [
     ('fertilizer-dose-response-curve.pdf', 'h'),    # Stack horizontally
     ('fertilizer-timing-effects.pdf', 'v'),
     ('fertilizer-gps-support-strata.pdf', 'v'),
-    ('fertilizer-predictive.pdf', 'h'),   
+    ('fertilizer-predictive.pdf', 'h'), 
+    ('fertilizer-ols.pdf', 'h'),    
+    ('fertilizer-marginal-dose-response-ols.pdf', 'v'), # Stack vertically
 ]
  
 for pdf_suffix, stacking in PDFS:
