@@ -217,6 +217,11 @@ def plot_point_estimates(causal_df, save_path, fertilizer):
         xlim = (-10, 55)
         xlabel = 'Average N-AE (kg/kg)'
         title = None
+    elif 'PFERT' in estimator_name:
+        fig, ax = plt.subplots(1, 1, figsize=(2.5, 1.5))
+        xlim = (-10, 40)
+        xlabel = 'Average N-AE (kg/kg)'
+        title = None
     else:
         fig, ax = plt.subplots(1, 1, figsize=(2.5, 1.0))
         xlim = (3, 20)
@@ -225,6 +230,8 @@ def plot_point_estimates(causal_df, save_path, fertilizer):
         
     if 'TIME' in estimator_name:
         groups = ['Basal-Only', 'Top-Only', 'Basal+Single', 'Basal+Split']
+    elif 'PFERT' in estimator_name:
+        groups = ['N-Only', 'DAP', 'Other-NP']
     else:
         groups = df['Group'].unique()
     # Reverse groups so they plot top to bottom correctly as in standard error bars if needed,
@@ -283,7 +290,15 @@ def plot_point_estimates(causal_df, save_path, fertilizer):
         ax.set_yticks(y_ticks - 0.5, minor=True)
         ax.grid(which='minor', axis='y', linestyle='-')
         ax.grid(which='major', axis='y', linewidth=0)
-        ax.set_xticks(np.arange(-10, 100, 5), minor=True)
+        ax.set_xticks(np.arange(-10, 55, 5), minor=True)
+    elif 'PFERT' in estimator_name:
+        ax.set_ylim(-0.5, 2.5)
+        ax.axvline(0, color='k', linestyle='--')
+        y_ticks = ax.get_yticks()
+        ax.set_yticks(y_ticks - 0.5, minor=True)
+        ax.grid(which='minor', axis='y', linestyle='-')
+        ax.grid(which='major', axis='y', linewidth=0)
+        ax.set_xticks(np.arange(-10, 100, 2), minor=True)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -.4, 0., .0), ncol=2, title='Soil Type')
     else:
         ax.set_ylim(-0.5, len(groups) - 0.5)

@@ -4,18 +4,24 @@ outcome_node = "outcome"
 conditional_nodes = ["fertilizerTiming", "soil", "fieldHistory", "fertilizerAmountP"]
 random_seed = 43
 
-[experiments.Main]
+[experiments.MainDML]
 dag = "main-dag.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
-estimators = ["DML_SOIL", "DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "OLS_SOIL", "OLS_SOIL_RATE", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME"]
+estimators = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 #estimators = ["DML_SOIL_TIME"]
 robustness = ["PlaceboTest", "SensitivityAnalysis"]
 
-[experiments.ExahustiveAdj]
+[experiments.MainOLS]
+dag = "main-dag.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["OLS_SOIL", "OLS_SOIL_RATE", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
+robustness = []
+
+[experiments.ExahustiveAdjDML]
 dag = "main-dag.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
-#estimators = ["DML_SOIL", "DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "OLS_SOIL", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME"]
-estimators = ["DML_SOIL", "DML_SOIL", "OLS_SOIL"]
+estimators = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+#estimators = ["DML_SOIL", "DML_SOIL", "OLS_SOIL"]
 robustness = ["PlaceboTest", "SensitivityAnalysis"]
 
 [experiments.AlternativeDAG1]
@@ -27,5 +33,5 @@ robustness = []
 [experiments.AlternativeAdjustment]
 dag = "main-dag.json"
 adjustment_set = "ALT_MINIMUM_ADJ"
-estimators = ["DML_SOIL", "DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "OLS_SOIL", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME"]
+estimators = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT", "OLS_SOIL", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
 robustness = []

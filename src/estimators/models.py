@@ -107,6 +107,40 @@ def _build_legume_matrix(transformed_data):
     x_names_legume = ['Non-legume', 'Legume']
     return X_legume, x_names_legume
 
+def _build_pfert_matrix(transformed_data):
+    p_types_dict = {
+        'DAP': ['DAP'],
+        'Other-NP': [
+            'Yara-Mila-Cereal', 'Yara-Mila-OTESHA', 'NPK-20|10|10', 
+            'NPK-14|23|14', 'NPS', 'NPSZinc'
+        ]
+    }
+    
+    def assign_p_fertilizer_group(row):
+        basal_types = row['basaltypes'].split() if pd.notna(row['basaltypes']) else []
+        top1types = row['top1types'].split() if pd.notna(row['top1types']) else []
+        all_types = basal_types + top1types
+        types = []
+        for group, fertilizers in p_types_dict.items():
+            if any(fert in all_types for fert in fertilizers):
+                types.append(group)
+        if types == []:
+            return 'N-Only'
+        elif len(types) > 1:
+            return 'Other-NP'
+        else:
+            return types[0]
+
+    strategy = transformed_data.apply(assign_p_fertilizer_group, axis=1)
+    
+    x_names_pfert = ['N-Only', 'DAP', 'Other-NP']
+    for cat in x_names_pfert:
+        transformed_data[cat] = (strategy == cat).astype(float)
+        
+    X_pfert = transformed_data[x_names_pfert].to_numpy()
+    return X_pfert, x_names_pfert
+
+
 # ==========================================
 # BASE CLASSES
 # ==========================================
@@ -530,6 +564,32 @@ class DML_SOIL_LEGUME(BaseDMLEstimator):
         self._fit_dml(Y, T, W, groups)
         return data, self.model_y, self.model_t
 
+
+class DML_SOIL_PFERT(BaseDMLEstimator):
+    """Heterogeneous effect varying by soil type and P-fertilizer type."""
+    def fit(self, data, transformed_data, adjustment_set, treatment_name, outcome_name, groups=None):
+        X_pfert, x_names_pfert = _build_pfert_matrix(transformed_data)
+        features, w_names, x_names = get_feature_lists(
+            adjustment_set, transformed_data, treatment_name, outcome_name, x_names_pfert + ['soil_sandy']
+        )
+        
+        data, transformed_data, Y, T, W, groups, _ = self._trim_and_get_splits(
+            data, transformed_data, w_names, x_names, groups
+        )
+        
+        X_pfert, _ = _build_pfert_matrix(transformed_data)
+        X_soil, _ = _build_soil_matrix(transformed_data)
+        
+        self.X = np.hstack([
+            X_pfert * X_soil[:, 0].reshape(-1, 1),
+            X_pfert * X_soil[:, 1].reshape(-1, 1)
+        ])
+        
+        self.x_names = [f'{j}_{i}' for j in ('Non-sandy', 'Sandy') for i in x_names_pfert]
+        
+        self._fit_dml(Y, T, W, groups)
+        return data, self.model_y, self.model_t
+
 # ==========================================
 # OLS ESTIMATORS
 # ==========================================
@@ -620,6 +680,37 @@ class OLS_SOIL_TIME(BaseOLSEstimator):
             self.cate_column_map[f'N_{c}_Non-sandy'] = f'N_{c}_Non-sandy'
             
         ols_data = ols_data.drop(columns=['soil_sandy'] + x_names_time).astype(float)
+        return data, *self._fit_ols(ols_data, outcome_name)
+
+
+class OLS_SOIL_PFERT(BaseOLSEstimator):
+    """Ordinary Least Squares for heterogeneous effect by soil and P-fertilizer type."""
+    def fit(self, data, transformed_data, adjustment_set, treatment_name, outcome_name, groups=None):
+        X_pfert, x_names_pfert = _build_pfert_matrix(transformed_data)
+        features, _, _ = get_feature_lists(
+            adjustment_set, transformed_data, treatment_name, outcome_name, x_names_pfert + ['soil_sandy']
+        )
+        
+        ols_data = transformed_data[features].copy()
+        ols_data[outcome_name] = self.outcome
+        
+        is_sandy = ols_data['soil_sandy'].astype(bool)
+        
+        self.cate_column_map = {}
+        for c in x_names_pfert:
+            c_val = ols_data[c]
+            
+            self.X_counts[f'N_{c}_Sandy'] = (c_val * is_sandy).sum()
+            self.X_counts[f'N_{c}_Non-sandy'] = (c_val * ~is_sandy).sum()
+            
+            ols_data[f'N_{c}_Sandy'] = c_val * self.treatment * is_sandy
+            ols_data[f'N_{c}_Non-sandy'] = c_val * self.treatment * ~is_sandy
+            
+            self.cate_column_map[f'N_{c}_Sandy'] = f'N_{c}_Sandy'
+            self.cate_column_map[f'N_{c}_Non-sandy'] = f'N_{c}_Non-sandy'
+            
+        ols_data = ols_data.drop(columns=['soil_sandy'] + x_names_pfert).astype(float)
+        
         return data, *self._fit_ols(ols_data, outcome_name)
 
 

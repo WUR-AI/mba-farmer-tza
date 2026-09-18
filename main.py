@@ -231,9 +231,11 @@ def main():
                     
                 groups = data.loc[current_data.index, 'ADM2_PCODE'].values if 'ADM2_PCODE' in data.columns else None
 
+                current_transformed_data_subset = raw_data.loc[current_data.index].copy()
+                
                 current_data, shared_model_y, shared_model_t = model.fit(
                     data=current_data, 
-                    transformed_data=current_data, 
+                    transformed_data=current_transformed_data_subset, 
                     adjustment_set=adjustment_set, 
                     treatment_name=treatment_node, 
                     outcome_name=outcome_node,
@@ -275,13 +277,13 @@ def main():
                     if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE']:
                         try:
                             dose_resp_df = model.estimate_dose_response()
-                            csv_path = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-dose_response.csv"
+                            csv_path = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
                             os.makedirs(os.path.dirname(csv_path), exist_ok=True)
                             dose_resp_df.to_csv(csv_path)
                             
                             # Generate Average Marginal Effect
                             ame_df = model.estimate_average_marginal_effect()
-                            ame_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-marginal_effect.csv"
+                            ame_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-marginal_effect.csv"
                             ame_df.to_csv(ame_csv)
                             
                             print(f"Saved dose response and marginal effect outputs for {estimator_name}.")
@@ -311,7 +313,7 @@ def main():
                     # Save Causal Estimates CSV
                     if causal_records:
                         causal_df = pd.DataFrame(causal_records)
-                        causal_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-causal_estimates.csv"
+                        causal_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-causal_estimates.csv"
                         os.makedirs(os.path.dirname(causal_csv), exist_ok=True)
                         causal_df.to_csv(causal_csv, index=False)
                         
@@ -330,40 +332,59 @@ def main():
         
         estimator_names = exp_config.get('estimators', [])
         
-        for estimator_name in estimator_names:
-            if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE']:
-                try:
-                    dose_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-dose_response.csv"
-                    if os.path.exists(dose_csv):
-                        dose_resp_df = pd.read_csv(dose_csv, index_col=['Soil type', 'T'])
-                        pdf_path = f"plots/{fertilizer}-{args.experiment}/{estimator_name}-dose_response.pdf"
-                        from src.plots.estimates import plot_dose_response_curve, plot_average_marginal_effect
-                        plot_dose_response_curve(dose_resp_df, pdf_path, fertilizer)
-                        print(f"Generated {pdf_path}")
-                        
-                    ame_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-marginal_effect.csv"
-                    if os.path.exists(ame_csv):
-                        ame_df = pd.read_csv(ame_csv, index_col=['Soil type', 'T'])
-                        ame_pdf = f"plots/{fertilizer}-{args.experiment}/{estimator_name}-marginal_effect.pdf"
-                        # We use data.T_absolute for histogram matching
-                        T_absolute = data[treatment_var]
-                        plot_average_marginal_effect(ame_df, T_absolute, ame_pdf, fertilizer)
-                        print(f"Generated {ame_pdf}")
-                except Exception as e:
-                    print(f"Failed plotting RATE estimates for {estimator_name}: {e}")
+        adj_set_type = exp_config.get('adjustment_set', 'OPTIMAL_MINIMUM_ADJ')
+        treatment_node = exp_config.get('treatment_node', global_config.get('treatment_node', f'fertilizerAmount{fertilizer}'))
+        outcome_node = exp_config.get('outcome_node', global_config.get('outcome_node', 'outcome'))
+        dag_basename = os.path.splitext(os.path.basename(exp_config.get('dag')))[0]
+        
+        adj_cache_path = f"outputs/adjustment_sets/adj_{dag_basename}_{treatment_node}_{outcome_node}_{adj_set_type}.json"
+        
+        if os.path.exists(adj_cache_path):
+            with open(adj_cache_path, 'r') as f:
+                adjustment_sets_raw = json.load(f)
+            if len(adjustment_sets_raw) > 0 and isinstance(adjustment_sets_raw[0], str):
+                adjustment_sets_list = [adjustment_sets_raw]
             else:
-                try:
-                    causal_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}-causal_estimates.csv"
-                    if os.path.exists(causal_csv):
-                        causal_df = pd.read_csv(causal_csv)
-                        causal_df['Estimator'] = estimator_name
-                        
-                        pdf_path = f"plots/{fertilizer}-{args.experiment}/{estimator_name}-point_estimates.pdf"
-                        from src.plots.estimates import plot_point_estimates
-                        plot_point_estimates(causal_df, pdf_path, fertilizer)
-                        print(f"Generated point estimates plot for {estimator_name}.")
-                except Exception as e:
-                    print(f"Failed plotting point estimates for {estimator_name}: {e}")
+                adjustment_sets_list = adjustment_sets_raw
+        else:
+            adjustment_sets_list = [[]]
+            
+        for i, adjustment_set in enumerate(adjustment_sets_list):
+            suffix = f"_adj_{i+1}" if len(adjustment_sets_list) > 1 else "_adj_1"
+            for estimator_name in estimator_names:
+                if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE']:
+                    try:
+                        dose_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
+                        if os.path.exists(dose_csv):
+                            dose_resp_df = pd.read_csv(dose_csv, index_col=['Soil type', 'T'])
+                            pdf_path = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-dose_response.pdf"
+                            from src.plots.estimates import plot_dose_response_curve, plot_average_marginal_effect
+                            plot_dose_response_curve(dose_resp_df, pdf_path, fertilizer)
+                            print(f"Generated {pdf_path}")
+                            
+                        ame_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-marginal_effect.csv"
+                        if os.path.exists(ame_csv):
+                            ame_df = pd.read_csv(ame_csv, index_col=['Soil type', 'T'])
+                            ame_pdf = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-marginal_effect.pdf"
+                            # We use data.T_absolute for histogram matching
+                            T_absolute = data[treatment_var]
+                            plot_average_marginal_effect(ame_df, T_absolute, ame_pdf, fertilizer)
+                            print(f"Generated {ame_pdf}")
+                    except Exception as e:
+                        print(f"Failed plotting RATE estimates for {estimator_name} {suffix}: {e}")
+                else:
+                    try:
+                        causal_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-causal_estimates.csv"
+                        if os.path.exists(causal_csv):
+                            causal_df = pd.read_csv(causal_csv)
+                            causal_df['Estimator'] = estimator_name
+                            
+                            pdf_path = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-point_estimates.pdf"
+                            from src.plots.estimates import plot_point_estimates
+                            plot_point_estimates(causal_df, pdf_path, fertilizer)
+                            print(f"Generated point estimates plot for {estimator_name} {suffix}.")
+                    except Exception as e:
+                        print(f"Failed plotting point estimates for {estimator_name} {suffix}: {e}")
                     
     if args.robustness:
         print("\n--- Running Robustness Checks ---")
