@@ -212,36 +212,26 @@ def main():
                 print(f"Fitting {estimator_name} for adjustment set {i+1}/{len(adjustment_sets_list)}...")
                 EstimatorClass = get_estimator(estimator_name)
                 
-                model = EstimatorClass(
-                    outcome=current_data[outcome_var], 
-                    treatment=current_data[treatment_var], 
-                    controls=None, # Controls are resolved in fit
-                    model_y=shared_model_y,
-                    model_t=shared_model_t,
-                    random_state=random_seed
+                from src.estimators.base import fit_estimator
+                model, current_data, shared_model_y, shared_model_t = fit_estimator(
+                    estimator_name=estimator_name,
+                    EstimatorClass=EstimatorClass,
+                    current_data=current_data,
+                    raw_data=raw_data,
+                    adjustment_set=adjustment_set,
+                    treatment_node=treatment_node,
+                    outcome_node=outcome_node,
+                    outcome_var=outcome_var,
+                    treatment_var=treatment_var,
+                    random_seed=random_seed,
+                    shared_model_y=shared_model_y,
+                    shared_model_t=shared_model_t,
+                    points=points
                 )
                 
-                # We pass the default RF models if not already fitted
-                if getattr(model, 'model_y', None) is None:
-                    model.model_y = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
-                    model.model_t = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
-                    model.is_first_pass = True
-                else:
-                    model.is_first_pass = False
-                    
-                groups = data.loc[current_data.index, 'ADM2_PCODE'].values if 'ADM2_PCODE' in data.columns else None
-
-                current_transformed_data_subset = raw_data.loc[current_data.index].copy()
-                
-                current_data, shared_model_y, shared_model_t = model.fit(
-                    data=current_data, 
-                    transformed_data=current_transformed_data_subset, 
-                    adjustment_set=adjustment_set, 
-                    treatment_name=treatment_node, 
-                    outcome_name=outcome_node,
-                    groups=groups,
-                    **({'points': points.loc[current_data.index]} if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE'] else {})
-                )
+                os.makedirs(os.path.dirname(model_cache_path), exist_ok=True)
+                with open(model_cache_path, 'wb') as f:
+                    pickle.dump(model, f)
                 
                 # Plot GPS Support for the first pass
                 if getattr(model, 'is_first_pass', False) and hasattr(model, 'diagnostics') and model.diagnostics is not None:
@@ -388,12 +378,17 @@ def main():
                     
     if args.robustness:
         print("\n--- Running Robustness Checks ---")
-        robustness_tests = exp_config.get('robustness', [])
+        robustness_tests = exp_config.get('robustness', {})
+        if isinstance(robustness_tests, list):
+            # Fallback
+            robustness_tests = {k: exp_config.get('estimators', []) for k in robustness_tests}
+        
         estimator_names = exp_config.get('estimators', [])
         
         adj_set_type = exp_config.get('adjustment_set', 'OPTIMAL_MINIMUM_ADJ')
         treatment_node = exp_config.get('treatment_node', global_config.get('treatment_node', f'fertilizerAmount{fertilizer}'))
         outcome_node = exp_config.get('outcome_node', global_config.get('outcome_node', 'outcome'))
+        random_seed = global_config.get('random_seed', 43)
         dag_basename = os.path.splitext(os.path.basename(exp_config.get('dag')))[0]
         
         adj_cache_path = f"outputs/adjustment_sets/adj_{dag_basename}_{treatment_node}_{outcome_node}_{adj_set_type}.json"
@@ -405,8 +400,30 @@ def main():
             adjustment_sets_list = [adjustment_sets_raw]
         else:
             adjustment_sets_list = adjustment_sets_raw
+
+        print("Loading data for robustness checks...")
+        data = load_and_preprocess_data(
+            data_path="/data/mba-tza", data_version="260116"
+        )
+        
+        # We need the points for RATE estimators
+        coords = data[['lat', 'lon']].copy()
+        import geopandas as gpd
+        points = gpd.GeoSeries(gpd.points_from_xy(coords['lon'], coords['lat'], crs='EPSG:32736'), index=coords.index)
+        
+        raw_data = data.copy()
+        
+        robustness_dir = f"outputs/robustness/{fertilizer}-{args.experiment}/"
+        os.makedirs(robustness_dir, exist_ok=True)
+        
+        sensitivity_records = []
             
         for i, adjustment_set in enumerate(adjustment_sets_list):
+            control_columns = [node_variable_map[node] for node in adjustment_set]
+            control_columns = [item for sublist in control_columns for item in sublist]
+            current_data = data[[outcome_var, treatment_var] + control_columns].copy()
+            current_data = current_data.dropna()
+
             for estimator_name in estimator_names:
                 suffix = f"_adj_{i+1}" if len(adjustment_sets_list) > 1 else "_adj_1"
                 model_cache_path = f"outputs/estimators/{estimator_name}_{dag_basename}_{treatment_node}_{outcome_node}_{adj_set_type}{suffix}.pkl"
@@ -416,17 +433,83 @@ def main():
                     with open(model_cache_path, 'rb') as f:
                         model = pickle.load(f)
                         
-                    if "PlaceboTest" in robustness_tests:
-                        print("Running Placebo Test...")
-                        from src.robustness.placebo import run_placebo_test
-                        mean_ate, std_ate = run_placebo_test(model, n_runs=10)
-                        print(f"Placebo ATE: {mean_ate:.4f} (std: {std_ate:.4f})")
-                        
-                    if "SensitivityAnalysis" in robustness_tests:
+                    if estimator_name in robustness_tests.get("SensitivityAnalysis", []) and "RATE" not in estimator_name:
                         print("Running Sensitivity Analysis...")
                         from src.robustness.sensitivity import run_sensitivity_analysis
                         summary = run_sensitivity_analysis(model)
-                        print(summary)
+                        if summary:
+                            summary['Estimator'] = estimator_name
+                            summary['Adj_Set'] = i+1
+                            sensitivity_records.append(summary)
+                        
+                    if estimator_name in robustness_tests.get("PlaceboTest", []):
+                        EstimatorClass = get_estimator(estimator_name)
+                        
+                        from src.robustness.placebo import run_random_placebo_treatment, run_pretreatment_placebo_outcome
+                        
+                        print("Running Random Placebo Treatment (RPT)...")
+                        ate_df, cate_df, dose_results = run_random_placebo_treatment(
+                            N_PLACEBO_RUNS=100, # Keep to 10 for speed
+                            estimator_name=estimator_name,
+                            EstimatorClass=EstimatorClass,
+                            current_data=current_data,
+                            raw_data=raw_data,
+                            adjustment_set=adjustment_set,
+                            treatment_node=treatment_node,
+                            outcome_node=outcome_node,
+                            outcome_var=outcome_var,
+                            treatment_var=treatment_var,
+                            random_seed=random_seed,
+                            shared_model_y=None,
+                            shared_model_t=None,
+                            points=points
+                        )
+                        
+                        if not ate_df.empty:
+                            ate_df.to_csv(f"{robustness_dir}/{estimator_name}{suffix}-RPT_ATE.csv", index=False)
+                        if not cate_df.empty:
+                            cate_df.to_csv(f"{robustness_dir}/{estimator_name}{suffix}-RPT_CATE.csv", index=False)
+                        if dose_results:
+                            with open(f"{robustness_dir}/{estimator_name}{suffix}-RPT_DOSE.pkl", 'wb') as f:
+                                pickle.dump(dose_results, f)
+                                
+                    if estimator_name in robustness_tests.get("PreTreatmentPlacebo", []):
+                        EstimatorClass = get_estimator(estimator_name)
+                        print("Running Pre-treatment Placebo Outcome (PTPO)...")
+                        
+                        dag_path = os.path.join("config", "dags", exp_config.get('dag'))
+                        with open(dag_path, 'r') as f:
+                            dag_edges = json.load(f)
+                        causal_ancestor_nodes = [edge[0] for edge in dag_edges if edge[1] == treatment_node]
+                        
+                        pre_treatment_vars = []
+                        for node in causal_ancestor_nodes:
+                            pre_treatment_vars.extend(node_variable_map.get(node, []))
+                            
+                        # Ensure they exist in the currently extracted data subset
+                        pre_treatment_vars = [v for v in pre_treatment_vars if v in current_data.columns]
+                        
+                        ptpo_df = run_pretreatment_placebo_outcome(
+                            pre_treatment_vars=pre_treatment_vars,
+                            estimator_name=estimator_name,
+                            EstimatorClass=EstimatorClass,
+                            current_data=current_data,
+                            raw_data=raw_data,
+                            adjustment_set=adjustment_set,
+                            treatment_node=treatment_node,
+                            outcome_node=outcome_node,
+                            treatment_var=treatment_var,
+                            random_seed=random_seed,
+                            shared_model_y=None,
+                            shared_model_t=None,
+                            points=points
+                        )
+                        if not ptpo_df.empty:
+                            ptpo_df.to_csv(f"{robustness_dir}/{estimator_name}{suffix}-PTPO_results.csv", index=False)
+
+        if sensitivity_records:
+            pd.DataFrame(sensitivity_records).to_csv(f"{robustness_dir}/sensitivity_results.csv", index=False)
+            print(f"Saved sensitivity results to {robustness_dir}/sensitivity_results.csv")
 
 if __name__ == "__main__":
     main()

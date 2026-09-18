@@ -1,61 +1,166 @@
 import numpy as np
 import pandas as pd
-import copy
+from tqdm import tqdm
+from src.estimators.base import fit_estimator
 
-def run_placebo_test(estimator_instance, n_runs=10):
-    """
-    Runs a placebo test by randomly shuffling the treatment variable and refitting the model.
-    """
-    original_model = estimator_instance.est
+def run_random_placebo_treatment(
+    N_PLACEBO_RUNS,
+    estimator_name,
+    EstimatorClass,
+    current_data,
+    raw_data,
+    adjustment_set,
+    treatment_node,
+    outcome_node,
+    outcome_var,
+    treatment_var,
+    random_seed=43,
+    shared_model_y=None,
+    shared_model_t=None,
+    points=None
+):
+    ate_results = []
+    cate_results = []
+    dose_results = []
     
-    # We need to re-fit the exact same estimator, but with shuffled T.
-    # Note: For this to work robustly, we could just copy the estimator instance, 
-    # but some internal states might be tied up.
+    for i in tqdm(range(N_PLACEBO_RUNS), desc=f"RPT: {estimator_name}"):
+        placebo_data = current_data.copy()
+        placebo_data[treatment_var] = np.random.choice(
+            current_data[treatment_var], size=len(current_data), replace=True
+        )
+        
+        try:
+            model, _, _, _ = fit_estimator(
+                estimator_name=estimator_name,
+                EstimatorClass=EstimatorClass,
+                current_data=placebo_data,
+                raw_data=raw_data,
+                adjustment_set=adjustment_set,
+                treatment_node=treatment_node,
+                outcome_node=outcome_node,
+                outcome_var=outcome_var,
+                treatment_var=treatment_var,
+                random_seed=random_seed + i,
+                shared_model_y=shared_model_y,
+                shared_model_t=shared_model_t,
+                points=points
+            )
+            
+            # ATE
+            try:
+                ate = model.estimate_ate()
+                ate_results.append({
+                    'Run': i,
+                    'Value': ate.value,
+                    'Std_Error': ate.std_error,
+                    'P_Value': ate.p_value
+                })
+            except:
+                pass
+                
+            # CATE
+            try:
+                cates = model.estimate_cate()
+                if isinstance(cates, dict):
+                    for k, v in cates.items():
+                        cate_results.append({
+                            'Run': i,
+                            'Group': k,
+                            'Value': v.value,
+                            'Std_Error': v.std_error,
+                            'P_Value': v.p_value
+                        })
+            except:
+                pass
+                
+            # DOSE
+            if "RATE" in estimator_name:
+                try:
+                    dose_results.append(model.estimate_dose_response())
+                except:
+                    pass
+        except Exception as e:
+            print(f"RPT run {i} failed: {e}")
+            
+    ate_df = pd.DataFrame(ate_results) if ate_results else pd.DataFrame()
+    cate_df = pd.DataFrame(cate_results) if cate_results else pd.DataFrame()
     
-    # We will just yield a summary or return a boolean if the effect becomes insignificant.
-    # Since doing a full loop takes a lot of time, we'll do n_runs (default 10).
-    
-    Y = estimator_instance.outcome.values
-    W = estimator_instance.controls.values if estimator_instance.controls is not None else None
-    
+    return ate_df, cate_df, dose_results
+
+
+def run_pretreatment_placebo_outcome(
+    pre_treatment_vars,
+    estimator_name,
+    EstimatorClass,
+    current_data,
+    raw_data,
+    adjustment_set,
+    treatment_node,
+    outcome_node,
+    treatment_var,
+    random_seed=43,
+    shared_model_y=None,
+    shared_model_t=None,
+    points=None
+):
     results = []
     
-    for _ in range(n_runs):
-        # We need the original T
-        if hasattr(estimator_instance, 'T_absolute'):
-            T_original = estimator_instance.T_absolute
-        else:
-            T_original = estimator_instance.treatment.values
+    for placebo_var in tqdm(pre_treatment_vars, desc=f"PTPO: {estimator_name}"):
+        if placebo_var not in current_data.columns:
+            continue
             
-        T_placebo = np.random.choice(T_original, size=len(T_original), replace=True)
+        placebo_data = current_data.copy()
         
-        # Fit a new clone of the estimator's base est
-        # EconML models don't clone easily, but we can try sklearn.base.clone
-        from sklearn.base import clone
+        # To prevent feature leakage, we must explicitly drop the placebo variable 
+        # from raw_data so that get_feature_lists doesn't add it back into X or W.
+        placebo_raw_data = raw_data.copy()
+        if placebo_var in placebo_raw_data.columns:
+            placebo_raw_data = placebo_raw_data.drop(columns=[placebo_var])
+        
         try:
-            placebo_est = clone(original_model)
-        except:
-            import copy
-            placebo_est = copy.deepcopy(original_model)
-            
-        if hasattr(estimator_instance, 'cubic_spline_transformer'):
-            from src.estimators.base import build_treatment_featurizer
-            import geopandas as gpd
-            # mock points for featurizer if needed, this is tricky to extract
-            # so we just use the original treatment_featurizer which has spatial_avg fixed
-            placebo_est = placebo_est.fit(
-                Y=Y, T=estimator_instance.est.featurizer.transform(T_placebo.reshape(-1, 1)) if hasattr(estimator_instance.est, 'featurizer') and estimator_instance.est.featurizer is not None else T_placebo, 
-                W=W, X=estimator_instance.X,
-                inference='statsmodels'
-            )
-        else:
-            placebo_est = placebo_est.fit(
-                Y=Y, T=T_placebo, W=W, X=estimator_instance.X,
-                inference='statsmodels'
+            model, _, _, _ = fit_estimator(
+                estimator_name=estimator_name,
+                EstimatorClass=EstimatorClass,
+                current_data=placebo_data,
+                raw_data=placebo_raw_data,
+                adjustment_set=adjustment_set,
+                treatment_node=treatment_node,
+                outcome_node=placebo_var, # Just use the variable string as the outcome node dummy
+                outcome_var=placebo_var, # Treat placebo_var as the new outcome
+                treatment_var=treatment_var,
+                random_seed=random_seed,
+                shared_model_y=shared_model_y,
+                shared_model_t=shared_model_t,
+                points=points
             )
             
-        # Get ATE
-        ate = placebo_est.ate(estimator_instance.X)
-        results.append(ate)
-        
-    return np.mean(results), np.std(results)
+            try:
+                ate = model.estimate_ate()
+                results.append({
+                    'Placebo_Outcome': placebo_var,
+                    'Parameter': 'ATE',
+                    'Value': ate.value,
+                    'Std_Error': ate.std_error,
+                    'P_Value': ate.p_value
+                })
+            except:
+                pass
+                
+            try:
+                cates = model.estimate_cate()
+                if isinstance(cates, dict):
+                    for k, v in cates.items():
+                        results.append({
+                            'Placebo_Outcome': placebo_var,
+                            'Parameter': f"CATE: {k}",
+                            'Value': v.value,
+                            'Std_Error': v.std_error,
+                            'P_Value': v.p_value
+                        })
+            except:
+                pass
+                
+        except Exception as e:
+            print(f"PTPO run failed for {placebo_var}: {e}")
+
+    return pd.DataFrame(results)

@@ -10,6 +10,62 @@ import json
 
 RANDOM_SEED = 43
 
+def fit_estimator(
+    estimator_name,
+    EstimatorClass,
+    current_data,
+    raw_data,
+    adjustment_set,
+    treatment_node,
+    outcome_node,
+    outcome_var,
+    treatment_var,
+    random_seed=43,
+    shared_model_y=None,
+    shared_model_t=None,
+    points=None
+):
+    """
+    Unified helper to initialize and fit an estimator with all necessary boilerplate.
+    """
+    model = EstimatorClass(
+        outcome=current_data[outcome_var], 
+        treatment=current_data[treatment_var], 
+        controls=None, # Controls are resolved in fit
+        model_y=shared_model_y,
+        model_t=shared_model_t,
+        random_state=random_seed
+    )
+    
+    # We pass the default RF models if not already fitted
+    if getattr(model, 'model_y', None) is None:
+        from sklearn.ensemble import RandomForestRegressor
+        model.model_y = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
+        model.model_t = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
+        model.is_first_pass = True
+    else:
+        model.is_first_pass = False
+        
+    groups = raw_data.loc[current_data.index, 'ADM2_PCODE'].values if 'ADM2_PCODE' in raw_data.columns else None
+
+    current_transformed_data_subset = raw_data.loc[current_data.index].copy()
+    
+    kwargs = {}
+    if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE'] and points is not None:
+        kwargs['points'] = points.loc[current_data.index]
+
+    current_data, shared_model_y, shared_model_t = model.fit(
+        data=current_data, 
+        transformed_data=current_transformed_data_subset, 
+        adjustment_set=adjustment_set, 
+        treatment_name=treatment_node, 
+        outcome_name=outcome_node,
+        groups=groups,
+        **kwargs
+    )
+    
+    return model, current_data, shared_model_y, shared_model_t
+
 @dataclass
 class CausalEstimate:
     """

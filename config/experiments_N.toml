@@ -9,7 +9,10 @@ dag = "main-dag.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 #estimators = ["DML_SOIL_TIME"]
-robustness = ["PlaceboTest", "SensitivityAnalysis"]
+[experiments.MainDML.robustness]
+PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+PreTreatmentPlacebo = ["DML_SOIL"]
 
 [experiments.MainOLS]
 dag = "main-dag.json"
@@ -22,7 +25,10 @@ dag = "main-dag.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
 estimators = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 #estimators = ["DML_SOIL", "DML_SOIL", "OLS_SOIL"]
-robustness = ["PlaceboTest", "SensitivityAnalysis"]
+[experiments.ExahustiveAdjDML.robustness]
+#PlaceboTest = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+#SensitivityAnalysis = ["DML_SOIL"]
+PreTreatmentPlacebo = ["DML_SOIL"]
 
 [experiments.AlternativeDAG1]
 dag = "alt1-dag.json"

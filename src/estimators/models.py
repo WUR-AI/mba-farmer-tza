@@ -201,6 +201,29 @@ class BaseDMLEstimator(BaseEstimator):
         return self.model_y, self.model_t
 
     def estimate_ate(self):
+        if hasattr(self.est, 'ate_inference'):
+            try:
+                inf = self.est.ate_inference(X=self.X)
+                p_val = inf.pvalue()
+                if isinstance(p_val, (np.ndarray, list, tuple)):
+                    p_val = p_val[0] if len(p_val) > 0 else np.nan
+                
+                ci = inf.conf_int_mean()
+                ci_lower, ci_upper = ci[0], ci[1]
+                
+                return CausalEstimate(
+                    value=inf.mean_point,
+                    std_error=inf.stderr_mean,
+                    p_value=p_val,
+                    ci_lower=ci_lower,
+                    ci_upper=ci_upper,
+                    estimator_instance=self,
+                    count=len(self.X)
+                )
+            except Exception:
+                pass
+                
+        # Fallback for OLS or if ate_inference fails
         cates = self.estimate_cate()
         if hasattr(self, 'x_names'):
             cates = {k: v for k, v in cates.items() if k in self.x_names}
