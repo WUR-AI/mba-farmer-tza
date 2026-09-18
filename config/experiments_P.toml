@@ -1,0 +1,23 @@
+[global]
+fertilizer = "P"
+treatment_node = "fertilizerAmountP"
+outcome_node = "outcome"
+conditional_nodes = ["fertilizerTiming", "soil"]
+
+[experiments.Main]
+dag = "main-dag.json"
+adjustment_set = "OPTIMAL_MINIMUM_ADJ"
+estimators = ["DML_SOIL", "DML_SOIL_RATE", "OLS_SOIL"]
+robustness = ["PlaceboTest", "SensitivityAnalysis"]
+
+[experiments.AlternativeDAG1]
+dag = "alt1-dag.json"
+adjustment_set = "OPTIMAL_MINIMUM_ADJ"
+estimators = ["DML_SOIL"]
+robustness = []
+
+[experiments.AlternativeAdjustment]
+dag = "main-dag.json"
+adjustment_set = "ALT_MINIMUM_ADJ"
+estimators = ["DML_SOIL", "DML_SOIL_RATE"]
+robustness = []

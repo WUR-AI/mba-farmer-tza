@@ -1,0 +1,110 @@
+{
+    "fertilizerAmountP": [
+        "fertP_total"
+    ],
+    "fertilizerAmountN": [
+        "fertN_total"
+    ],
+    "fieldHistory": [
+        "fieldsize_value",
+        "history_maize",
+        "history_nocrop",
+        "history_legume",
+        "history_rootandtuber",
+        "history_oilseed",
+        "history_maizelegume"
+    ],
+    "soil": [
+        "soilfert_cec",
+        "soilfert_oc",
+        "soilpp_clay",
+        "soilpp_density",
+        "soilpp_sand",
+        "soil_sandy"
+    ],
+    "outcome": [
+        "maizeprodkg_ha"
+    ],
+    "fertilizerTiming": [
+        "fertN_56leaves",
+        "fertN_810leaves",
+        "fertN_basal",
+        "fertN_kneehigh",
+        "fertN_tasselingsilking",
+        "fertP_56leaves",
+        "fertP_810leaves",
+        "fertP_basal",
+        "fertP_kneehigh",
+        "fertP_tasselingsilking"
+    ],
+    "otherManagement": [
+        "herbicide_post",
+        "herbicide_pre",
+        "herbicide_any",
+        "manure_any",
+        "planting_handhoe",
+        "planting_ploughsowing",
+        "planting_string",
+        "residue_burn",
+        "residue_feedtoanimals",
+        "residue_incorporateinthesoil",
+        "residue_leaveonfield",
+        "residue_onfield"
+    ],
+    "variety": [
+        "variety_hybrid",
+        "variety_recycled"
+    ],
+    "accessibilityRAI": [
+        "accessibility_rai"
+    ],
+    "investmentCap": [
+        "investing_capacity_index"
+    ],
+    "weatherSeason": [
+        "0to10perc_season_tmean",
+        "0to10perc_season_srad",
+        "0to10perc_season_prec",
+        "0to10perc_season_rainydays",
+        "10to20perc_season_tmean",
+        "10to20perc_season_srad",
+        "10to20perc_season_prec",
+        "10to20perc_season_rainydays",
+        "20to30perc_season_tmean",
+        "20to30perc_season_srad",
+        "20to30perc_season_prec",
+        "20to30perc_season_rainydays",
+        "30to40perc_season_tmean",
+        "30to40perc_season_srad",
+        "30to40perc_season_prec",
+        "30to40perc_season_rainydays",
+        "40to50perc_season_tmean",
+        "40to50perc_season_srad",
+        "40to50perc_season_prec",
+        "40to50perc_season_rainydays",
+        "50to60perc_season_tmean",
+        "50to60perc_season_srad",
+        "50to60perc_season_prec",
+        "50to60perc_season_rainydays",
+        "60to70perc_season_tmean",
+        "60to70perc_season_srad",
+        "60to70perc_season_prec",
+        "60to70perc_season_rainydays",
+        "70to80perc_season_tmean",
+        "70to80perc_season_srad",
+        "70to80perc_season_prec",
+        "70to80perc_season_rainydays",
+        "80to90perc_season_tmean",
+        "80to90perc_season_srad",
+        "80to90perc_season_prec",
+        "80to90perc_season_rainydays",
+        "90to100perc_season_tmean",
+        "90to100perc_season_srad",
+        "90to100perc_season_prec",
+        "90to100perc_season_rainydays",
+        "0to100perc_season_tmean",
+        "0to100perc_season_srad",
+        "0to100perc_season_prec",
+        "0to100perc_season_rainydays"
+    ]
+}
