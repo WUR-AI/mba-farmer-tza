@@ -282,61 +282,83 @@ class BaseOLSEstimator(BaseEstimator):
         return cates
 
 class DoseResponseMixin:
-    def _calculate_spline_inference(self, T0, T1, is_sandy, param, param_cov_matrix):
-        t_change = self.cubic_spline_transformer.transform([[T1]]) - self.cubic_spline_transformer.transform([[T0]])
+    def estimate_ate(self):
+        cates = self.estimate_cate()
+        # Filter out the "High Non-Return" points for ATE aggregation
+        base_cates = {k: v for k, v in cates.items() if 'High Non-Return' not in k}
         
+        if hasattr(self, 'X_counts'):
+            weights = {k: self.X_counts[k] for k in base_cates.keys() if k in self.X_counts}
+        elif hasattr(self, 'x_names'):
+            weights = {name: self.X[:, i].sum() for i, name in enumerate(self.x_names) if name in base_cates}
+        else:
+            weights = None
+            
+        return _aggregate_cates_to_ate(base_cates, self, weights=weights)
+
+    def _calculate_continuous_inference(self, T0, T1, is_sandy, param, param_cov_matrix, scale_divide=False):
+        T1_arr = np.atleast_1d(T1).reshape(-1, 1)
+        T0_arr = np.atleast_1d(T0).reshape(-1, 1)
+        if T0_arr.shape[0] == 1 and T1_arr.shape[0] > 1:
+            T0_arr = np.full_like(T1_arr, T0_arr[0, 0])
+            
+        t_change = self.treatment_transformer.transform(T1_arr) - self.treatment_transformer.transform(T0_arr)
+        
+        if scale_divide:
+            scale = T1_arr - T0_arr
+            scale = np.where(scale == 0, 1.0, scale)
+            t_change = t_change / scale
+            
         # Check if we are in DML or OLS
         if hasattr(self, 'cate_column_map'):
             # OLS_SOIL_RATE
-            x_final_model = np.zeros(len(param))
+            x_final_model = np.zeros((T1_arr.shape[0], len(param)))
             for i in range(t_change.shape[1]):
-                col_name = f'spline_{i}_sandy' if is_sandy else f'spline_{i}_nosandy'
-                idx = param.index.get_loc(col_name)
-                x_final_model[idx] = t_change[0, i]
+                col_name = f'feat_{i}_sandy' if is_sandy else f'feat_{i}_nosandy'
+                if col_name in param.index:
+                    idx = param.index.get_loc(col_name)
+                    x_final_model[:, idx] = t_change[:, i]
             
-            ate = x_final_model @ param
-            ate_se = np.sqrt(x_final_model @ param_cov_matrix @ x_final_model)
+            x_mean = x_final_model.mean(axis=0)
+            ate = x_mean @ param
+            ate_se = np.sqrt(x_mean @ param_cov_matrix @ x_mean)
         else:
             # DML_SOIL_RATE
             X_for_inference = np.array([[0, 1]]) if is_sandy else np.array([[1, 0]])
             x_final_model = []
             for j in range(t_change.shape[1]):
-                x_final_model.append(X_for_inference * t_change[0, j])
+                x_final_model.append(np.repeat(X_for_inference, T1_arr.shape[0], axis=0) * t_change[:, j:j+1])
             x_final_model = np.hstack(x_final_model)
             
-            ate = (x_final_model.mean(axis=0).reshape(1, -1) @ param.reshape(-1, 1))[0, 0]
-            ate_se = np.sqrt(
-                x_final_model.mean(axis=0).reshape(1, -1) @ 
-                param_cov_matrix @ 
-                x_final_model.mean(axis=0).reshape(-1, 1)
-            )[0, 0]
+            x_mean = x_final_model.mean(axis=0).reshape(1, -1)
+            ate = (x_mean @ param.reshape(-1, 1))[0, 0]
+            ate_se = np.sqrt(x_mean @ param_cov_matrix @ x_mean.T)[0, 0]
             
         return ate, ate_se
 
     def estimate_dose_response(self):
         """
-        Calculates marginal response curve for a change from Tmean to t
+        Calculates marginal response curve for a change from baseline_t to t
         for t spanning the 5th to 95th percentiles.
         """
-        # Determine parameter arrays based on estimator type
         if hasattr(self, 'cate_column_map'):
-            # OLS
             param_cov_matrix = self.est.cov_params()
             param = self.est.params
         else:
-            # DML
             param_cov_matrix = self.est._ortho_learner_model_final._model_final._model._param_var
             param = self.est._ortho_learner_model_final._model_final._model._param
             
-        Tmean = self.T_absolute.mean()
+        baseline = getattr(self, 'baseline_t', 'q05')
+        if baseline == 'q05':
+            baseline = np.percentile(self.T_absolute, 5)
+            
         q5, q95 = np.percentile(self.T_absolute, [5, 95])
         t_grid = np.arange(np.ceil(q5), np.floor(q95) + 1, 1.0)
         
         results = []
         for t in t_grid:
-            # Calculate effect of moving from Tmean to t (Lift = Y(t) - Y(Tmean))
-            ate_sandy, se_sandy = self._calculate_spline_inference(Tmean, t, True, param, param_cov_matrix)
-            ate_nonsandy, se_nonsandy = self._calculate_spline_inference(Tmean, t, False, param, param_cov_matrix)
+            ate_sandy, se_sandy = self._calculate_continuous_inference(baseline, t, True, param, param_cov_matrix)
+            ate_nonsandy, se_nonsandy = self._calculate_continuous_inference(baseline, t, False, param, param_cov_matrix)
             
             results.append({
                 'Soil type': 'Sandy',
@@ -378,8 +400,8 @@ class DoseResponseMixin:
         
         results = []
         for t in t_grid:
-            ate_sandy, se_sandy = self._calculate_spline_inference(t, t + N, True, param, param_cov_matrix)
-            ate_nonsandy, se_nonsandy = self._calculate_spline_inference(t, t + N, False, param, param_cov_matrix)
+            ate_sandy, se_sandy = self._calculate_continuous_inference(t, t + N, True, param, param_cov_matrix)
+            ate_nonsandy, se_nonsandy = self._calculate_continuous_inference(t, t + N, False, param, param_cov_matrix)
             
             ate_sandy /= N
             se_sandy /= N
@@ -407,7 +429,20 @@ class DoseResponseMixin:
         return df
 
     def estimate_cate(self):
-        t25, t75 = np.quantile(self.T_absolute, [0.25, 0.75])
+        baseline = getattr(self, 'baseline_t', 'q05')
+        if baseline == 'q05':
+            baseline = np.percentile(self.T_absolute, 5)
+            
+        t_target_sandy = self.T_absolute
+        t_target_nonsandy = self.T_absolute
+        
+        if hasattr(self, 'x_names'):
+            x_names_list = list(self.x_names)
+            if 'Sandy' in x_names_list and 'Non-sandy' in x_names_list:
+                sandy_idx = x_names_list.index('Sandy')
+                nonsandy_idx = x_names_list.index('Non-sandy')
+                t_target_sandy = self.T_absolute[self.X[:, sandy_idx] == 1]
+                t_target_nonsandy = self.T_absolute[self.X[:, nonsandy_idx] == 1]
         
         if hasattr(self, 'cate_column_map'):
             param_cov_matrix = self.est.cov_params()
@@ -416,10 +451,9 @@ class DoseResponseMixin:
             param_cov_matrix = self.est._ortho_learner_model_final._model_final._model._param_var
             param = self.est._ortho_learner_model_final._model_final._model._param
             
-        ate_sandy, se_sandy = self._calculate_spline_inference(t25, t75, True, param, param_cov_matrix)
-        ate_nonsandy, se_nonsandy = self._calculate_spline_inference(t25, t75, False, param, param_cov_matrix)
+        ate_sandy, se_sandy = self._calculate_continuous_inference(baseline, t_target_sandy, True, param, param_cov_matrix, scale_divide=True)
+        ate_nonsandy, se_nonsandy = self._calculate_continuous_inference(baseline, t_target_nonsandy, False, param, param_cov_matrix, scale_divide=True)
         
-        scale = t75 - t25
         def _build_estimate(ate, se, group_name):
             ci_mean_lower = ate - 1.96 * se
             ci_mean_upper = ate + 1.96 * se
@@ -437,8 +471,8 @@ class DoseResponseMixin:
                 count = int(self.X[:, idx].sum())
                 
             return CausalEstimate(
-                value=ate / scale, std_error=se / scale, p_value=p_value, 
-                ci_lower=ci_mean_lower / scale, ci_upper=ci_mean_upper / scale, estimator_instance=self, count=count
+                value=ate, std_error=se, p_value=p_value, 
+                ci_lower=ci_mean_lower, ci_upper=ci_mean_upper, estimator_instance=self, count=count
             )
             
         cates = {
@@ -446,52 +480,98 @@ class DoseResponseMixin:
             'Non-sandy': _build_estimate(ate_nonsandy, se_nonsandy, 'Non-sandy')
         }
         
+        # High Non-Return Point via Parametric Bootstrap
         try:
-            ame_df = self.estimate_average_marginal_effect()
-            treatment_name = self.treatment.name
-            N = 10 if 'N' in treatment_name else 5
+            np.random.seed(42)
+            n_sims = 10000
+            param_vals = param.values if hasattr(param, 'values') else np.array(param)
+            cov_vals = param_cov_matrix.values if hasattr(param_cov_matrix, 'values') else np.array(param_cov_matrix)
             
-            for soil in ['Sandy', 'Non-sandy']:
-                if soil not in ame_df.index.get_level_values('Soil type'):
-                    continue
-                df_soil = ame_df.xs(soil, level='Soil type')
+            # Ensure it is symmetric positive semi-definite
+            cov_vals = (cov_vals + cov_vals.T) / 2
+            
+            simulated_params = np.random.multivariate_normal(param_vals, cov_vals, size=n_sims)
+            
+            q95 = np.percentile(self.T_absolute, 95)
+            q50 = np.percentile(self.T_absolute, 50) # I expect the non-return rate to be on the upper end of the curve
+            # Evaluate up to 150% of the 95th percentile
+            t_grid = np.arange(q50, q95, 0.5)
+            
+            # Prepare X_diff arrays for all t in t_grid for both Sandy and Non-Sandy
+            X_diff_sandy_list = []
+            X_diff_nonsandy_list = []
+            
+            for t in t_grid:
+                t_change = self.treatment_transformer.transform([[t + 0.5]]) - self.treatment_transformer.transform([[t - 0.5]])
                 
-                # Lowest SE index
-                min_se_t = df_soil['Standard Error'].idxmin()
-                # Optimal T Range (Highest Lower CI)
-                opt_t = df_soil['Lower CI'].idxmax()
-                cates[f'{soil}: Opt T Range'] = CausalEstimate(
-                    value=opt_t, std_error=np.nan, p_value=np.nan, ci_lower=np.nan, ci_upper=np.nan, estimator_instance=self
-                )
+                if hasattr(self, 'cate_column_map'):
+                    x_final_sandy = np.zeros(len(param))
+                    x_final_nonsandy = np.zeros(len(param))
+                    for i in range(t_change.shape[1]):
+                        col_sandy = f'feat_{i}_sandy'
+                        col_nonsandy = f'feat_{i}_nosandy'
+                        if col_sandy in param.index:
+                            x_final_sandy[param.index.get_loc(col_sandy)] = t_change[0, i]
+                        if col_nonsandy in param.index:
+                            x_final_nonsandy[param.index.get_loc(col_nonsandy)] = t_change[0, i]
+                    X_diff_sandy_list.append(x_final_sandy)
+                    X_diff_nonsandy_list.append(x_final_nonsandy)
+                else:
+                    X_sandy = np.array([[0, 1]])
+                    X_nonsandy = np.array([[1, 0]])
+                    x_final_sandy = []
+                    x_final_nonsandy = []
+                    for j in range(t_change.shape[1]):
+                        x_final_sandy.append(X_sandy * t_change[0, j])
+                        x_final_nonsandy.append(X_nonsandy * t_change[0, j])
+                    X_diff_sandy_list.append(np.hstack(x_final_sandy).mean(axis=0))
+                    X_diff_nonsandy_list.append(np.hstack(x_final_nonsandy).mean(axis=0))
+            
+            X_diff_sandy = np.array(X_diff_sandy_list) # shape: (len(t_grid), num_params)
+            X_diff_nonsandy = np.array(X_diff_nonsandy_list)
+            
+            for soil, X_diff in [('Sandy', X_diff_sandy), ('Non-sandy', X_diff_nonsandy)]:
+                # Compute marginal effects for all simulations and all t
+                # simulated_params shape: (n_sims, num_params)
+                # X_diff shape: (len(t_grid), num_params)
+                # Output shape: (n_sims, len(t_grid))
+                ME_sims = np.dot(simulated_params, X_diff.T)
                 
-                # Lower non-return rate (moving backward from min_se_t)
-                lower_t = min_se_t
-                ts = sorted(df_soil.index.tolist())
-                min_idx = ts.index(min_se_t)
-                for i in range(min_idx, -1, -1):
-                    t_val = ts[i]
-                    if df_soil.loc[t_val, 'Lower CI'] < 0:
-                        lower_t = t_val
-                        break
-                cates[f'{soil}: Low Non-Return'] = CausalEstimate(
-                    value=lower_t, std_error=np.nan, p_value=np.nan, ci_lower=np.nan, ci_upper=np.nan, estimator_instance=self
-                )
+                high_non_return_points = []
+                for i in range(n_sims):
+                    # Find first t where ME <= 0
+                    negative_indices = np.where(ME_sims[i] <= 0)[0]
+                    if len(negative_indices) > 0:
+                        high_non_return_points.append(t_grid[negative_indices[0]])
+                    else:
+                        # Never crosses 0 in the given grid
+                        high_non_return_points.append(np.nan)
+                        
+                high_non_return_points = np.array(high_non_return_points)
+                valid_points = high_non_return_points[~np.isnan(high_non_return_points)]
                 
-                # Higher non-return rate (moving forward from min_se_t)
-                higher_t = min_se_t
-                for i in range(min_idx, len(ts)):
-                    t_val = ts[i]
-                    if df_soil.loc[t_val, 'Lower CI'] < 0:
-                        higher_t = t_val
-                        break
+                if len(valid_points) > 0:
+                    point_est = np.median(valid_points)
+                    ci_lower = np.percentile(valid_points, 2.5)
+                    ci_upper = np.percentile(valid_points, 97.5)
+                    std_error = np.std(valid_points)
+                else:
+                    point_est = np.nan
+                    ci_lower = np.nan
+                    ci_upper = np.nan
+                    std_error = np.nan
+                    
                 cates[f'{soil}: High Non-Return'] = CausalEstimate(
-                    value=higher_t, std_error=np.nan, p_value=np.nan, ci_lower=np.nan, ci_upper=np.nan, estimator_instance=self
+                    value=point_est, std_error=std_error, p_value=np.nan, 
+                    ci_lower=ci_lower, ci_upper=ci_upper, estimator_instance=self
                 )
+                
         except Exception as e:
-            print(f"Failed to estimate new CATE parameters: {e}")
+            print(f"Failed to estimate High Non-Return CATE parameters: {e}")
+            import traceback
+            traceback.print_exc()
             
         return cates
-
 # ==========================================
 # DML ESTIMATORS
 # ==========================================
@@ -515,6 +595,11 @@ class DML_SOIL(BaseDMLEstimator):
 
 class DML_SOIL_RATE(DoseResponseMixin, BaseDMLEstimator):
     """Heterogeneous effect (response curve) varying by soil type."""
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.featurizer_type = featurizer_type
+        self.baseline_t = baseline_t
+
     def fit(self, data, transformed_data, adjustment_set, treatment_name, outcome_name, points, groups=None):
         features, w_names, x_names = get_feature_lists(
             adjustment_set, transformed_data, treatment_name, outcome_name, ['soil_sandy']
@@ -529,12 +614,20 @@ class DML_SOIL_RATE(DoseResponseMixin, BaseDMLEstimator):
         actual_treatment_col = 'fertN_total' if 'N' in treatment_name else 'fertP_total'
         self.T_absolute = data[actual_treatment_col].values
         
-        treatment_featurizer, self.cubic_spline_transformer = build_treatment_featurizer(
-            self.T_absolute, points_out.geometry
+        treatment_featurizer, self.treatment_transformer = build_treatment_featurizer(
+            self.T_absolute, points_out.geometry, featurizer_type=self.featurizer_type
         )
         
         self._fit_dml(Y, self.T_absolute.reshape(-1, 1), W, groups, treatment_featurizer=treatment_featurizer)
         return data, self.model_y, self.model_t
+
+class DML_SOIL_RATE_SPLINE(DML_SOIL_RATE):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, featurizer_type='SPLINE', **kwargs)
+
+class DML_SOIL_RATE_POLY(DML_SOIL_RATE):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, featurizer_type='POLY', **kwargs)
 
 
 class DML_SOIL_TIME(BaseDMLEstimator):
@@ -643,6 +736,11 @@ class OLS_SOIL(BaseOLSEstimator):
 
 class OLS_SOIL_RATE(DoseResponseMixin, BaseOLSEstimator):
     """Ordinary Least Squares for heterogeneous effect by soil and continuous rate."""
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.featurizer_type = featurizer_type
+        self.baseline_t = baseline_t
+
     def fit(self, data, transformed_data, adjustment_set, treatment_name, outcome_name, points, groups=None):
         features, _, _ = get_feature_lists(
             adjustment_set, transformed_data, treatment_name, outcome_name, ['soil_sandy']
@@ -660,20 +758,28 @@ class OLS_SOIL_RATE(DoseResponseMixin, BaseOLSEstimator):
         actual_treatment_col = 'fertN_total' if 'N' in treatment_name else 'fertP_total'
         self.T_absolute = data[actual_treatment_col].values
         
-        _, self.cubic_spline_transformer = build_treatment_featurizer(self.T_absolute, points.geometry)
-        T_splined = self.cubic_spline_transformer.transform(self.T_absolute.reshape(-1, 1))
+        _, self.treatment_transformer = build_treatment_featurizer(
+            self.T_absolute, points.geometry, featurizer_type=self.featurizer_type
+        )
+        T_splined = self.treatment_transformer.transform(self.T_absolute.reshape(-1, 1))
         
         for i in range(T_splined.shape[1]):
-            ols_data[f'spline_{i}_sandy'] = T_splined[:, i] * is_sandy
-            ols_data[f'spline_{i}_nosandy'] = T_splined[:, i] * (~is_sandy)
+            ols_data[f'feat_{i}_sandy'] = T_splined[:, i] * is_sandy
+            ols_data[f'feat_{i}_nosandy'] = T_splined[:, i] * (~is_sandy)
             
         ols_data = ols_data.drop(columns=['soil_sandy']).astype(float)
         
-        # In OLS_SOIL_RATE, we evaluate CATE using DoseResponseMixin, so cate_column_map isn't strictly needed for estimate_cate, 
-        # but we set it to empty to satisfy BaseOLSEstimator and trigger DoseResponseMixin overrides.
         self.cate_column_map = {} 
         
         return data, *self._fit_ols(ols_data, outcome_name)
+
+class OLS_SOIL_RATE_SPLINE(OLS_SOIL_RATE):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, featurizer_type='SPLINE', **kwargs)
+
+class OLS_SOIL_RATE_POLY(OLS_SOIL_RATE):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, featurizer_type='POLY', **kwargs)
 
 
 class OLS_SOIL_TIME(BaseOLSEstimator):

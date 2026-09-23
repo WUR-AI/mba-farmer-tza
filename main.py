@@ -264,7 +264,7 @@ def main():
                     except Exception as e:
                         print(f"{'ATE':<25} | Error: {str(e)[:30]}")
                     
-                    if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE']:
+                    if 'SOIL_RATE' in estimator_name:
                         try:
                             dose_resp_df = model.estimate_dose_response()
                             csv_path = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
@@ -342,7 +342,7 @@ def main():
         for i, adjustment_set in enumerate(adjustment_sets_list):
             suffix = f"_adj_{i+1}" if len(adjustment_sets_list) > 1 else "_adj_1"
             for estimator_name in estimator_names:
-                if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE']:
+                if 'SOIL_RATE' in estimator_name:
                     try:
                         dose_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
                         if os.path.exists(dose_csv):

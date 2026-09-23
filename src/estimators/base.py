@@ -51,7 +51,7 @@ def fit_estimator(
     current_transformed_data_subset = raw_data.loc[current_data.index].copy()
     
     kwargs = {}
-    if estimator_name in ['DML_SOIL_RATE', 'OLS_SOIL_RATE'] and points is not None:
+    if 'SOIL_RATE' in estimator_name and points is not None:
         kwargs['points'] = points.loc[current_data.index]
 
     current_data, shared_model_y, shared_model_t = model.fit(
@@ -121,30 +121,16 @@ def get_feature_lists(adjustment_set, transformed_data, treatment_name, outcome_
     return features, w_names, x_cols
 
 
-def build_treatment_featurizer(T_absolute, points_geom):
-    cubic_spline_transformer = SplineTransformer(n_knots=5, degree=3, include_bias=False)
-    T_trans = cubic_spline_transformer.fit_transform(T_absolute.reshape(-1, 1))
-    
-    T_spline_spatial_avg = np.zeros_like(T_trans)
-    for i in range(T_trans.ndim):
-        t_col = T_trans[:, i]
-        spatial_transformer = SpatialTransform(
-            points_geom, maxlag=50e3, esitmator='cressie',
-            model='matern', n_lags=50, use_nugget=True
-        )
-        spatial_transformer.fit(t_col)
-        t_trans_col = spatial_transformer.transform_demean()
-        T_spline_spatial_avg[:, i] = t_col - np.where(np.isnan(t_trans_col), 0, t_trans_col)
+def build_treatment_featurizer(T_absolute, points_geom, featurizer_type='SPLINE'):
+    if featurizer_type == 'SPLINE':
+        transformer = SplineTransformer(n_knots=5, degree=3, include_bias=False)
+    elif featurizer_type == 'POLY':
+        from sklearn.preprocessing import PolynomialFeatures
+        transformer = PolynomialFeatures(degree=2, include_bias=False)
+    else:
+        raise ValueError(f"Unknown featurizer_type: {featurizer_type}")
         
-    spatial_anomaly_transform = SpatialAnomalyTransformerCallable(T_spline_spatial_avg)
-    spatial_anomaly_transformer = FunctionTransformer(spatial_anomaly_transform)
-    
-    treatment_featurizer = Pipeline([
-        ('spline', cubic_spline_transformer),
-        ('spatial anomaly', spatial_anomaly_transformer)
-    ])
-    
-    return treatment_featurizer, cubic_spline_transformer
+    return transformer, transformer
 
 
 class BaseEstimator(ABC):
