@@ -18,6 +18,7 @@ from .ols import (
     OLS_SOIL_PFERT
 )
 from .rf import RF_PREDICTIVE
+from .gps import GPS_SOIL_RATE
 
 def get_estimator(name: str):
     estimators = {
@@ -35,7 +36,8 @@ def get_estimator(name: str):
         'OLS_SOIL_TIME': OLS_SOIL_TIME,
         'OLS_SOIL_LEGUME': OLS_SOIL_LEGUME,
         'OLS_SOIL_PFERT': OLS_SOIL_PFERT,
-        'RF_PREDICTIVE': RF_PREDICTIVE
+        'RF_PREDICTIVE': RF_PREDICTIVE,
+        'GPS_SOIL_RATE': GPS_SOIL_RATE
     }
     if name not in estimators:
         raise ValueError(f"Estimator {name} is not implemented.")

@@ -20,6 +20,16 @@ dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_TIME"]
 
+[experiments.MainRF]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["RF_PREDICTIVE"]
+
+[experiments.MainGPS]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["GPS_SOIL_RATE"]
+
 [experiments.ExahustiveAdjDML]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
