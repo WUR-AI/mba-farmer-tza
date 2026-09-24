@@ -318,3 +318,82 @@ def plot_point_estimates(causal_df, save_path, fertilizer):
     plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300)
     plt.close()
     print(f"Saved point estimates plot to {save_path}")
+
+def plot_ucc_contours(ucc_data, save_path=None, levels=10, show_ci=True, critical_value=0.0, ax=None, title='UCC Sensitivity Contour'):
+    """
+    Plots the 2-D contour for the Unobserved Common Confounder (UCC) sensitivity analysis.
+    """
+    import numpy as np
+    try:
+        plt.style.use('publication.mplstyle')
+    except Exception as e:
+        pass
+        
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(4, 3))
+    else:
+        fig = ax.figure
+        
+    grid_cd = ucc_data['grid_cd']
+    grid_cy = ucc_data['grid_cy']
+    adj_estimate = ucc_data['adj_estimate']
+    ci_lower = ucc_data['ci_lower']
+    benchmarks = ucc_data.get('benchmarks', None)
+    
+    # Plot filled contours for the adjusted estimate
+    cf = ax.contourf(grid_cd, grid_cy, adj_estimate, levels=levels, cmap='RdBu', alpha=0.8)
+    cbar = fig.colorbar(cf, ax=ax)
+    cbar.set_label('Adjusted ATE')
+    
+    # Add contour lines
+    ct = ax.contour(grid_cd, grid_cy, adj_estimate, levels=levels, colors='k', linewidths=0.5, alpha=0.5)
+    ax.clabel(ct, inline=True, fontsize=8, fmt='%.1f')
+    
+    # Highlight the critical contour for point estimate
+    # Find if it crosses the critical value
+    if np.nanmin(adj_estimate) <= critical_value <= np.nanmax(adj_estimate):
+        ax.contour(grid_cd, grid_cy, adj_estimate, levels=[critical_value], colors='red', linestyles='solid', linewidths=2)
+        
+    # Highlight the critical contour for the confidence interval
+    if show_ci and np.nanmin(ci_lower) <= critical_value <= np.nanmax(ci_lower):
+        # ax.contour(grid_cd, grid_cy, ci_lower, levels=[critical_value], colors='red', linestyles='dashed', linewidths=2)
+        # Add a custom line to legend for the CI
+        # import matplotlib.lines as mlines
+        # ci_line = mlines.Line2D([], [], color='red', linestyle='dashed', linewidth=2, label=f'Lower CI = {critical_value}')
+        
+        handles, labels = ax.get_legend_handles_labels()
+        # handles.append(ci_line)
+        ax.legend(handles=handles, loc='upper right', frameon=True, fontsize=8)
+    
+    factor_dict = {
+        'soil': 'S',
+        'fertilizerAmountP': 'P',
+        'fertilizerAmountN': 'N',
+        # 'weatherSeason': 'W',
+        'otherManagement': 'O',
+        # 'variety': 'V',
+        # 'investmentCap': 'I',
+        # 'accessibilityRAI': 'A',
+        'fieldHistory': 'H'
+    }
+
+    if benchmarks:
+        for name, (cd, cy) in benchmarks.items():
+            if cd == 0 and cy == 0:
+                continue
+            if name not in factor_dict:
+                continue
+            # ax.plot(cd, cy, 'k*', markersize=10, markeredgecolor='white')
+            ax.annotate(factor_dict[name], (cd, cy), xytext=(5, 5), textcoords='offset points', fontsize=8,
+                        bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7, ec='none'))
+            
+    ax.set_xlabel(r'Treatment variance explained by UCC ($c_d$)')
+    ax.set_ylabel(r'Outcome variance explained by UCC ($c_y$)')
+    ax.set_title(title)
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300)
+        plt.close(fig)
+        print(f"Saved UCC contour plot to {save_path}")
+

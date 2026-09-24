@@ -264,7 +264,7 @@ def main():
                     except Exception as e:
                         print(f"{'ATE':<25} | Error: {str(e)[:30]}")
                     
-                    if 'SOIL_RATE' in estimator_name:
+                    if 'SOIL_RATE' in estimator_name or estimator_name == 'RF_PREDICTIVE':
                         try:
                             dose_resp_df = model.estimate_dose_response()
                             csv_path = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
@@ -342,7 +342,7 @@ def main():
         for i, adjustment_set in enumerate(adjustment_sets_list):
             suffix = f"_adj_{i+1}" if len(adjustment_sets_list) > 1 else "_adj_1"
             for estimator_name in estimator_names:
-                if 'SOIL_RATE' in estimator_name:
+                if 'SOIL_RATE' in estimator_name or estimator_name == 'RF_PREDICTIVE':
                     try:
                         dose_csv = f"outputs/estimates/{fertilizer}-{args.experiment}-{estimator_name}{suffix}-dose_response.csv"
                         if os.path.exists(dose_csv):
@@ -372,9 +372,38 @@ def main():
                             pdf_path = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-point_estimates.pdf"
                             from src.plots.estimates import plot_point_estimates
                             plot_point_estimates(causal_df, pdf_path, fertilizer)
-                            print(f"Generated point estimates plot for {estimator_name} {suffix}.")
+                            print(f"Generated {pdf_path}")
                     except Exception as e:
                         print(f"Failed plotting point estimates for {estimator_name} {suffix}: {e}")
+                        
+                try:
+                    import glob
+                    ucc_files = glob.glob(f"outputs/robustness/{fertilizer}-{args.experiment}/{estimator_name}{suffix}_*-ucc_data.pkl")
+                    if not ucc_files:
+                        ucc_files = glob.glob(f"outputs/robustness/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-ucc_data.pkl")
+                        
+                    for ucc_data_path in ucc_files:
+                        try:
+                            with open(ucc_data_path, 'rb') as f_ucc:
+                                ucc_data = pickle.load(f_ucc)
+                            
+                            basename = os.path.basename(ucc_data_path)
+                            prefix = f"{estimator_name}{suffix}_"
+                            if basename.startswith(prefix):
+                                group_str = basename[len(prefix):].replace('-ucc_data.pkl', '')
+                                title = f"UCC Sensitivity for {estimator_name} ({group_str})"
+                                ucc_pdf = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}_{group_str}-ucc_contour.pdf"
+                            else:
+                                title = f"UCC Sensitivity for {estimator_name}"
+                                ucc_pdf = f"plots/{fertilizer}-{args.experiment}/{estimator_name}{suffix}-ucc_contour.pdf"
+                                
+                            from src.plots.estimates import plot_ucc_contours
+                            plot_ucc_contours(ucc_data, save_path=ucc_pdf, title=title)
+                        except Exception as e:
+                            print(f"Failed to plot UCC contour for {ucc_data_path}: {e}")
+                            
+                except Exception as e:
+                    print(f"Failed plotting UCC contours for {estimator_name} {suffix}: {e}")
                     
     if args.robustness:
         print("\n--- Running Robustness Checks ---")
@@ -405,6 +434,9 @@ def main():
         data = load_and_preprocess_data(
             data_path="/data/mba-tza", data_version="260116"
         )
+        
+        # We only consider farmers who applied the specified fertilizer
+        data = data[data[treatment_var] > 0]
         
         # We need the points for RATE estimators
         coords = data[['lat', 'lon']].copy()
@@ -441,6 +473,52 @@ def main():
                             summary['Estimator'] = estimator_name
                             summary['Adj_Set'] = i+1
                             sensitivity_records.append(summary)
+                            
+                    if estimator_name in robustness_tests.get("UnobservedCommonConfounder", []):
+                        print("Running UCC Sensitivity Analysis...")
+                        try:
+                            from src.robustness.sensitivity import compute_ucc_sensitivity, estimate_empirical_benchmarks
+                            
+                            # benchmarks = estimate_empirical_benchmarks(
+                            #     data=current_data,
+                            #     outcome_var=outcome_var,
+                            #     treatment_var=treatment_var,
+                            #     node_variable_map=node_variable_map,
+                            #     adjustment_set=adjustment_set
+                            # )
+                            benchmarks = None
+                            cates = model.estimate_cate()
+                            if isinstance(cates, dict):
+                                cates_to_run = cates.copy()
+                                try:
+                                    ate_obj = model.estimate_ate()
+                                    if ate_obj is not None:
+                                        cates_to_run['ATE'] = ate_obj
+                                except Exception as e:
+                                    print(f"Failed to append ATE for {estimator_name}: {e}")
+                                    
+                                for group, estimate_obj in cates_to_run.items():
+                                    try:
+                                        if estimate_obj.count is None:
+                                            print(f"Skipping UCC for {group} due to missing count/df")
+                                            continue
+                                            
+                                        ucc_data = compute_ucc_sensitivity(
+                                            estimate=estimate_obj.value,
+                                            se=estimate_obj.std_error,
+                                            count=estimate_obj.count,
+                                            benchmark_covariates=benchmarks
+                                        )
+                                        
+                                        safe_group = group.replace(' ', '_').replace('/', '_').replace(':', '_')
+                                        ucc_data_path = f"{robustness_dir}/{estimator_name}{suffix}_{safe_group}-ucc_data.pkl"
+                                        with open(ucc_data_path, 'wb') as f_ucc:
+                                            pickle.dump(ucc_data, f_ucc)
+                                        print(f"Saved UCC data to {ucc_data_path}")
+                                    except Exception as e:
+                                        print(f"Failed to run UCC Sensitivity Analysis for {estimator_name} {suffix} (group {group}): {e}")
+                        except Exception as e:
+                            print(f"Failed to run UCC Sensitivity Analysis for {estimator_name} {suffix}: {e}")
                         
                     if estimator_name in robustness_tests.get("PlaceboTest", []):
                         EstimatorClass = get_estimator(estimator_name)
@@ -473,6 +551,22 @@ def main():
                             with open(f"{robustness_dir}/{estimator_name}{suffix}-RPT_DOSE.pkl", 'wb') as f:
                                 pickle.dump(dose_results, f)
                                 
+                        print(f"\n--- RPT Summary for {estimator_name} ---")
+                        import scipy.stats as st
+                        if not ate_df.empty:
+                            mean_val = ate_df['Value'].mean()
+                            std_val = ate_df['Value'].std()
+                            # T-test for null hypothesis that the mean of the placebo estimates is zero
+                            _, pval = st.ttest_1samp(ate_df['Value'].dropna(), 0.0)
+                            print(f"ATE Placebo Estimate: {mean_val:.4f} (Std: {std_val:.4f}, Mean=0 P-Value: {pval:.4f})")
+                        if not cate_df.empty:
+                            for group, group_df in cate_df.groupby('Group'):
+                                mean_val = group_df['Value'].mean()
+                                std_val = group_df['Value'].std()
+                                _, pval = st.ttest_1samp(group_df['Value'].dropna(), 0.0)
+                                print(f"CATE [{group}] Placebo Estimate: {mean_val:.4f} (Std: {std_val:.4f}, Mean=0 P-Value: {pval:.4f})")
+                        print("-------------------\n")
+                                
                     if estimator_name in robustness_tests.get("PreTreatmentPlacebo", []):
                         EstimatorClass = get_estimator(estimator_name)
                         print("Running Pre-treatment Placebo Outcome (PTPO)...")
@@ -488,6 +582,10 @@ def main():
                             
                         # Ensure they exist in the currently extracted data subset
                         pre_treatment_vars = [v for v in pre_treatment_vars if v in current_data.columns]
+                        pre_treatment_vars = [
+                            v for v in pre_treatment_vars 
+                            if "season" not in v or v.startswith("0to100")
+                        ]
                         
                         ptpo_df = run_pretreatment_placebo_outcome(
                             pre_treatment_vars=pre_treatment_vars,

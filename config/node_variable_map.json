@@ -41,15 +41,16 @@
         "herbicide_post",
         "herbicide_pre",
         "herbicide_any",
-        "manure_any",
+        "manure_everyseason",
+        "manure_oneinmany",
+        "manure_oneintwo",
         "planting_handhoe",
         "planting_ploughsowing",
         "planting_string",
         "residue_burn",
         "residue_feedtoanimals",
         "residue_incorporateinthesoil",
-        "residue_leaveonfield",
-        "residue_onfield"
+        "residue_leaveonfield"
     ],
     "variety": [
         "variety_hybrid",
@@ -59,7 +60,8 @@
         "accessibility_rai"
     ],
     "investmentCap": [
-        "investing_capacity_index"
+        "mech_hand",
+        "mech_machine"
     ],
     "weatherSeason": [
         "0to10perc_season_tmean",

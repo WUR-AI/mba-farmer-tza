@@ -5,41 +5,28 @@ conditional_nodes = ["fertilizerTiming", "soil", "fieldHistory", "fertilizerAmou
 random_seed = 43
 
 [experiments.MainDML]
-dag = "main-dag.json"
+dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 #estimators = ["DML_SOIL_TIME"]
 [experiments.MainDML.robustness]
 PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
-SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+#SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 PreTreatmentPlacebo = ["DML_SOIL"]
-UnobservedCommonConfounder = ["DML_SOIL"]
-
+UnobservedCommonConfounder = ["DML_SOIL", "DML_SOIL_RATE_SPLINE"]
 
 [experiments.MainOLS]
-dag = "main-dag.json"
+dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
-estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_RATE_POLY", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
-robustness = []
+estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
+
+[experiments.MainRF]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["RF_PREDICTIVE"]
 
 [experiments.ExahustiveAdjDML]
-dag = "main-dag.json"
+dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
-estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_RATE_POLY", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
 #estimators = ["DML_SOIL", "DML_SOIL", "OLS_SOIL"]
-[experiments.ExahustiveAdjDML.robustness]
-#PlaceboTest = ["DML_SOIL", "DML_SOIL_RATE", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
-#SensitivityAnalysis = ["DML_SOIL"]
-PreTreatmentPlacebo = ["DML_SOIL"]
-
-[experiments.AlternativeDAG1]
-dag = "alt1-dag.json"
-adjustment_set = "OPTIMAL_MINIMUM_ADJ"
-estimators = ["DML_SOIL", "DML_SOIL"]
-robustness = []
-
-[experiments.AlternativeAdjustment]
-dag = "main-dag.json"
-adjustment_set = "ALT_MINIMUM_ADJ"
-estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_RATE_POLY", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT", "OLS_SOIL", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
-robustness = []

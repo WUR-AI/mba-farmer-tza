@@ -13,7 +13,8 @@ from .models import (
     OLS_SOIL_RATE_POLY,
     OLS_SOIL_TIME,
     OLS_SOIL_LEGUME,
-    OLS_SOIL_PFERT
+    OLS_SOIL_PFERT,
+    RF_PREDICTIVE
 )
 
 def get_estimator(name: str):
@@ -31,7 +32,8 @@ def get_estimator(name: str):
         'OLS_SOIL_RATE_POLY': OLS_SOIL_RATE_POLY,
         'OLS_SOIL_TIME': OLS_SOIL_TIME,
         'OLS_SOIL_LEGUME': OLS_SOIL_LEGUME,
-        'OLS_SOIL_PFERT': OLS_SOIL_PFERT
+        'OLS_SOIL_PFERT': OLS_SOIL_PFERT,
+        'RF_PREDICTIVE': RF_PREDICTIVE
     }
     if name not in estimators:
         raise ValueError(f"Estimator {name} is not implemented.")

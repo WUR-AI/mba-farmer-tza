@@ -302,7 +302,7 @@ def transform_other_management(data):
         prefix='residue_', drop_first=True, prefix_sep='' 
     )
     residue_df.columns = [col.replace(' ', '') for col in residue_df.columns]
-    residue_df['residue_onfield'] =  residue_df[['residue_incorporateinthesoil', 'residue_leaveonfield']].any(axis=1)
+    # residue_df['residue_onfield'] =  residue_df[['residue_incorporateinthesoil', 'residue_leaveonfield']].any(axis=1)
 
     # Herbicide
     herbicide_df = pd.DataFrame(index=data.index)
@@ -313,9 +313,9 @@ def transform_other_management(data):
     # Manure
     manure_df = pd.get_dummies(data.manurefreq, drop_first=False).iloc[:, [0, 2, 3]]
     manure_df.columns = ['manure_everyseason', 'manure_oneinmany', 'manure_oneintwo']
-    manure_df['manure_any'] = manure_df.any(axis=1)
+    # manure_df['manure_any'] = manure_df.any(axis=1)
     # Leave this to be the only manure variable
-    manure_df = manure_df[['manure_any']]
+    manure_df = manure_df[['manure_everyseason', 'manure_oneinmany', 'manure_oneintwo']]
 
     # Planting methods
     # This could be used as a proxy of farmer knowledge. 
@@ -434,6 +434,31 @@ def add_investing_capacity_index(data):
 
     return data.join(ici_df[['investing_capacity_index', 'score_land', 'score_mech', 'score_inputs']])
 
+def add_investing_capacity_proxies(data):
+    """
+    It returns the investing capacity score proxies. The proxies are mechanization dummies.
+    
+    Returns:
+    pd.DataFrame: The original dataframe with an added column 'investing_capacity_index'
+                  and sub-score columns for analysis.
+    """
+    def get_mech_score(val):
+        if pd.isna(val): return np.nan
+        val_str = str(val).lower()
+        if 'tractor' in val_str or 'machine' in val_str:
+            return 'machine'
+        elif 'ox' in val_str or 'cattle' in val_str or 'plough' in val_str or 'animal' in val_str:
+            return 'animal'
+        else:
+            return 'hand'
+    mech_cols = [c for c in data.columns if 'maizefieldprep' in c]
+    ici_dummies = pd.get_dummies(
+        data[mech_cols].map(get_mech_score), 
+        drop_first=True, prefix='mech'
+    )
+    return data.join(ici_dummies)
+    
+
 
 def load_and_preprocess_data(data_path: str, data_version: str = '260116'):
     """
@@ -509,7 +534,8 @@ def load_and_preprocess_data(data_path: str, data_version: str = '260116'):
         data = transform_variety(data)
         data = transform_field_history(data)
         data = transform_other_management(data)
-        data = add_investing_capacity_index(data)         
+        # data = add_investing_capacity_index(data)    
+        data = add_investing_capacity_proxies(data)      
         # Assign to 0 all the stage-specific fertilizer amounts if the total is zero
         data.loc[data.fertP_total == 0, data.filter(like='fertP').columns] = 0
         data.loc[data.fertN_total == 0, data.filter(like='fertN').columns] = 0
