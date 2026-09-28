@@ -5,20 +5,35 @@ from sklearn.model_selection import cross_val_predict, cross_val_score, GroupKFo
 
 from src.estimators.base import CausalEstimate
 
-def trim_and_score_models(model_y, model_t, X_train, Y, T, cv, data, transformed_data, points=None, groups=None):
+def trim_and_score_models(model_y, model_t, X_train, Y, T, cv, data, transformed_data, points=None, groups=None, random_state=43):
+    from sklearn.model_selection import KFold, GroupKFold
     if groups is not None:
-        cv_gen = list(GroupKFold(n_splits=cv).split(X_train, Y, groups=groups))
+        cv_gen = list(GroupKFold(n_splits=cv, shuffle=True, random_state=random_state).split(X_train, Y, groups=groups))
     else:
-        cv_gen = cv
+        cv_gen = list(KFold(n_splits=cv, shuffle=True, random_state=random_state).split(X_train, Y))
 
     print("Evaluating models with cross_val_score...")
     r2_t = cross_val_score(model_t, X_train, T, cv=cv_gen, groups=groups, scoring='r2', n_jobs=-1)
     r2_y = cross_val_score(model_y, X_train, Y, cv=cv_gen, groups=groups, scoring='r2', n_jobs=-1)
-    print(f"Treatment model R2: {np.mean(r2_t):.4f} (+/- {np.std(r2_t):.4f}) [{min(r2_t):.4f} - {max(r2_t):.4f}]")
-    print(f"Outcome model R2: {np.mean(r2_y):.4f} (+/- {np.std(r2_y):.4f}) [{min(r2_y):.4f} - {max(r2_y):.4f}]")
+    
+    for i, (train_idx, test_idx) in enumerate(cv_gen):
+        print(f"Fold {i+1}: Train size: {len(train_idx)}, Val size: {len(test_idx)} | "
+              f"Treatment R2: {r2_t[i]:.4f} | Outcome R2: {r2_y[i]:.4f}")
+              
+    from sklearn.metrics import r2_score
+    
+    T_pred = cross_val_predict(model_t, X_train, T, cv=cv_gen, groups=groups, n_jobs=-1)
+    Y_pred = cross_val_predict(model_y, X_train, Y, cv=cv_gen, groups=groups, n_jobs=-1)
+    
+    pooled_r2_t = r2_score(T, T_pred)
+    pooled_r2_y = r2_score(Y, Y_pred)
+    
+    print(f"Average Treatment model R2: {np.mean(r2_t):.4f} (+/- {np.std(r2_t):.4f}) [{min(r2_t):.4f} - {max(r2_t):.4f}]")
+    print(f"Pooled  Treatment model R2: {pooled_r2_t:.4f}")
+    print(f"Average Outcome model R2: {np.mean(r2_y):.4f} (+/- {np.std(r2_y):.4f}) [{min(r2_y):.4f} - {max(r2_y):.4f}]")
+    print(f"Pooled  Outcome model R2: {pooled_r2_y:.4f}")
     
     print("Performing GPS trimming...")
-    T_pred = cross_val_predict(model_t, X_train, T, cv=cv_gen, groups=groups, n_jobs=-1)
     res_var = np.var(T - T_pred)
     gps_density = stats.norm.pdf(T, loc=T_pred, scale=np.sqrt(res_var))
     

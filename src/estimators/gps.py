@@ -133,7 +133,7 @@ class GPS_SOIL_RATE(BaseEstimator):
         return mu_overall, mu_0, mu_1
 
     def estimate_dose_response(self):
-        baseline_t = np.percentile(self.T, 5)
+        baseline_t = np.mean(self.T)
         q5, q95 = np.percentile(self.T, [5, 95])
         t_eval = np.arange(np.ceil(q5), np.floor(q95) + 1, 1.0)
         
@@ -241,7 +241,7 @@ class GPS_SOIL_RATE(BaseEstimator):
         return pd.DataFrame(records).set_index(['Soil type', 'T']).sort_index()
 
     def _calc_effects(self, beta, sigma_sq, alpha):
-        t_ref = np.percentile(self.T, 5)
+        t_ref = np.mean(self.T)
         
         G_mat = self.G.reshape(-1, 1)
         W_treat = np.hstack([self.X, G_mat * self.X])

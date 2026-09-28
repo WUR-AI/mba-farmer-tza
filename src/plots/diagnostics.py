@@ -4,7 +4,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def plot_gps_support(diagnostics, transformed_data, raw_data, treatment_var, fertilizer, save_path):
+def plot_gps_support(diagnostics, transformed_data, raw_data, treatment_var, fertilizer, save_path=None):
     """
     Plots the density of predicted treatment (T_pred) stratified by quantiles of actual treatment (T).
     
@@ -74,8 +74,12 @@ def plot_gps_support(diagnostics, transformed_data, raw_data, treatment_var, fer
         fontweight='bold', bbox=dict(boxstyle='circle', fc='w', ec='k')
     )
     
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, format='pdf', bbox_inches='tight')
-    plt.close()
-    print(f"Saved GPS support plot to {save_path}")
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, format='pdf', bbox_inches='tight')
+        plt.close(g.fig)
+        print(f"Saved GPS support plot to {save_path}")
+    else:
+        # If no save path, just return the FacetGrid object
+        return g
 

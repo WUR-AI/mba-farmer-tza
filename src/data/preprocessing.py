@@ -154,7 +154,7 @@ def load_raw_data_and_add_external(data_path: str, data_version: str = '260116')
     inindex = inindex.set_index('fieldID')
     inindex.columns = ['accessibility_rai']
     # Attach weather, soil, RAI index  data to data frame.
-    data = data.join(soil_data).join(weather_data).join(inindex).join(points[['lat', 'lon', "ADM2_PCODE"]])
+    data = data.join(soil_data).join(weather_data).join(inindex).join(points[['lat', 'lon', "ADM2_PCODE", "ADM3_PCODE"]])
     data = data.drop(columns=COLS_TO_DROP)
     return data
 

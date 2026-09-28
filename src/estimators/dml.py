@@ -62,7 +62,7 @@ class BaseDMLEstimator(BaseEstimator):
         if getattr(self, 'is_first_pass', False):
             X_train = transformed_data.loc[:, w_names + x_names]
             data, transformed_data, points_out, diagnostics = trim_and_score_models(
-                self.model_y, self.model_t, X_train, Y, T, self.cv, data, transformed_data, points=points, groups=groups
+                self.model_y, self.model_t, X_train, Y, T, self.cv, data, transformed_data, points=points, groups=groups, random_state=self.random_state
             )
             self.diagnostics = diagnostics
             if groups is not None:
@@ -78,7 +78,10 @@ class BaseDMLEstimator(BaseEstimator):
 
     def _fit_dml(self, Y, T, W, groups, treatment_featurizer=None):
         if groups is not None:
-            cv_splits = list(GroupKFold(n_splits=self.cv).split(self.X, Y, groups=groups))
+            from sklearn.model_selection import GroupKFold
+            cv_splits = list(GroupKFold(
+                n_splits=int(self.cv), shuffle=True, random_state=self.random_state
+            ).split(self.X, Y, groups=groups))
         else:
             cv_splits = self.cv
             
@@ -147,6 +150,16 @@ class BaseDMLEstimator(BaseEstimator):
                 estimator_instance=self,
                 count=count
             )
+        # Marginalize soil groups if this is a complex estimator (like TIME, LEGUME, PFERT)
+        for soil in ['Non-sandy', 'Sandy']:
+            if soil not in self.x_names:
+                # Find all subgroups that start with this soil prefix
+                soil_subgroups = [g for g in self.x_names if g.startswith(f"{soil}_")]
+                if soil_subgroups:
+                    soil_cates = {g: cates[g] for g in soil_subgroups}
+                    soil_weights = {g: cates[g].count for g in soil_subgroups}
+                    cates[soil] = _aggregate_cates_to_ate(soil_cates, self, weights=soil_weights)
+                    
         return cates
 
 # DML ESTIMATORS
@@ -157,7 +170,7 @@ class DML_SOIL(BaseDMLEstimator):
     pass
 class DML_SOIL_RATE(DoseResponseMixin, BaseDMLEstimator):
     """Heterogeneous effect (response curve) varying by soil type."""
-    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='mean', **kwargs):
         super().__init__(*args, **kwargs)
         self.featurizer_type = featurizer_type
         self.baseline_t = baseline_t

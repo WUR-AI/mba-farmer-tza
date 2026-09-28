@@ -1,0 +1,16 @@
+{
+    "fertilizerAmountN": [
+        "investmentCap",
+        "accessibilityRAI",
+        "fieldHistory",
+        "soil",
+        "weatherSeason"
+    ],
+    "fertilizerAmountP": [
+        "investmentCap",
+        "accessibilityRAI",
+        "soil",
+        "weatherSeason",
+        "fieldHistory"
+    ]
+}

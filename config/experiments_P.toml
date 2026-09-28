@@ -8,12 +8,13 @@ random_seed = 43
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
-#estimators = ["DML_SOIL_TIME"]
+#estimators = ["DML_SOIL_RATE_SPLINE"]
 [experiments.MainDML.robustness]
-PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME"]
-#SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME"]
-PreTreatmentPlacebo = ["DML_SOIL"]
-UnobservedCommonConfounder = ["DML_SOIL", "DML_SOIL_RATE_SPLINE"]
+PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_RATE_SPLINE"]
+#PlaceboTest = ["DML_SOIL_RATE_SPLINE"]
+#SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME"]
+#PreTreatmentPlacebo = ["DML_SOIL"]
+#UnobservedCommonConfounder = ["DML_SOIL", "DML_SOIL_RATE_SPLINE"]
 
 [experiments.MainOLS]
 dag = "main-rev.json"
@@ -34,3 +35,13 @@ estimators = ["GPS_SOIL_RATE"]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
 estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+
+[experiments.NtoPDML]
+dag = "n-to-p.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+
+[experiments.ExahustiveAdjOLS]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EXHAUSTIVE"
+estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_TIME"]

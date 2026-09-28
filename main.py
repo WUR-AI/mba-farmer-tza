@@ -65,16 +65,11 @@ def run_identification(dag_path, treatment_node, outcome_node, conditional_nodes
         edges_list = json.load(f)
     assert set([treatment_node, outcome_node]+conditional_nodes).issubset({item for sublist in edges_list for item in sublist})
     
-    if os.path.exists(adj_cache_path):
-        print(f"Loading adjustment set from {adj_cache_path}...")
-        with open(adj_cache_path, 'r') as f:
-            adjustment_set = json.load(f)
-    else:
-        adjustment_set = identify_adjustment_set(edges_list, treatment_node, outcome_node, adj_set_type, conditional_nodes)
-        os.makedirs(os.path.dirname(adj_cache_path), exist_ok=True)
-        with open(adj_cache_path, 'w') as f:
-            json.dump(adjustment_set, f, indent=4)
-        print(f"Saved adjustment set to {adj_cache_path}")
+    adjustment_set = identify_adjustment_set(edges_list, treatment_node, outcome_node, adj_set_type, conditional_nodes)
+    os.makedirs(os.path.dirname(adj_cache_path), exist_ok=True)
+    with open(adj_cache_path, 'w') as f:
+        json.dump(adjustment_set, f, indent=4)
+    print(f"Saved adjustment set to {adj_cache_path}")
         
     print("Adjustment Set:")
     print(adjustment_set)
@@ -97,6 +92,28 @@ def load_experiment_data(data_path, data_version, treatment_var, outcome_var, no
     data = data[data[treatment_var] > 0]
     data = data.dropna(subset=[outcome_var, treatment_var])
     coords = raw_data.loc[data.index, ['lat', 'lon']].copy()
+    
+    SPATIAL_DEMEAN = False
+    SPATIAL_DEMEAN_CONTROLS = False
+    
+    if SPATIAL_DEMEAN:
+        data, coords = spatial_demean_data(data, coords, variables=[outcome_var, treatment_var])
+        
+    if SPATIAL_DEMEAN_CONTROLS:
+        spatial_control_nodes = ['soil', 'weatherSeason']
+        spatial_control_vars = []
+        for node in spatial_control_nodes:
+            if node in node_variable_map:
+                spatial_control_vars.extend(node_variable_map[node])
+        
+        spatial_continuous_vars = [
+            v for v in spatial_control_vars 
+            if v in data.columns and pd.api.types.is_numeric_dtype(data[v]) and data[v].nunique() > 2
+        ]
+        
+        if len(spatial_continuous_vars) > 0:
+            data, coords = spatial_demean_data(data, coords, variables=spatial_continuous_vars)
+            
     points = gpd.GeoSeries(gpd.points_from_xy(coords['lon'], coords['lat'], crs='EPSG:32736'), index=coords.index)
     
     return data, raw_data, coords, points
@@ -336,7 +353,7 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                     print("Running Random Placebo Treatment (RPT)...")
                     EstimatorClass = get_estimator(estimator_name)
                     ate_df, cate_df, dose_results = run_random_placebo_treatment(
-                        N_PLACEBO_RUNS=100, estimator_name=estimator_name, EstimatorClass=EstimatorClass,
+                        N_PLACEBO_RUNS=10, estimator_name=estimator_name, EstimatorClass=EstimatorClass,
                         current_data=current_data, raw_data=raw_data, adjustment_set=adjustment_set,
                         treatment_node=treatment_node, outcome_node=outcome_node, outcome_var=outcome_var,
                         treatment_var=treatment_var, random_seed=random_seed, shared_model_y=None,
@@ -368,10 +385,13 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                 if estimator_name in robustness_tests.get("PreTreatmentPlacebo", []):
                     print("Running Pre-treatment Placebo Outcome (PTPO)...")
                     EstimatorClass = get_estimator(estimator_name)
-                    dag_path = os.path.join("config", "dags", exp_config.get('dag'))
-                    with open(dag_path, 'r') as f:
-                        dag_edges = json.load(f)
-                    causal_ancestor_nodes = [edge[0] for edge in dag_edges if edge[1] == treatment_node]
+                    # Read pre-treatment nodes from ptpo_nodes.json
+                    with open("config/ptpo_nodes.json", "r") as f:
+                        ptpo_nodes_map = json.load(f)
+                    
+                    causal_ancestor_nodes = ptpo_nodes_map.get(treatment_node, [])
+                    if not causal_ancestor_nodes:
+                        print(f"Warning: No PTPO nodes found for {treatment_node} in config/ptpo_nodes.json")
                     
                     pre_treatment_vars = [v for node in causal_ancestor_nodes for v in node_variable_map.get(node, [])]
                     pre_treatment_vars = [v for v in pre_treatment_vars if v in current_data.columns and ("season" not in v or v.startswith("0to100"))]

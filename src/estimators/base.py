@@ -35,7 +35,8 @@ def fit_estimator(
         controls=None, # Controls are resolved in fit
         model_y=shared_model_y,
         model_t=shared_model_t,
-        random_state=random_seed
+        random_state=random_seed,
+        cv=5
     )
     
     # We pass the default RF models if not already fitted
@@ -47,7 +48,7 @@ def fit_estimator(
     else:
         model.is_first_pass = False
         
-    groups = raw_data.loc[current_data.index, 'ADM2_PCODE'].values if 'ADM2_PCODE' in raw_data.columns else None
+    groups = raw_data.loc[current_data.index, 'ADM3_PCODE'].values if 'ADM3_PCODE' in raw_data.columns else None
 
     current_transformed_data_subset = raw_data.loc[current_data.index].copy()
     
@@ -125,6 +126,8 @@ def get_feature_lists(adjustment_set, transformed_data, treatment_name, outcome_
 def build_treatment_featurizer(T_absolute, points_geom, featurizer_type='SPLINE'):
     if featurizer_type == 'SPLINE':
         transformer = SplineTransformer(n_knots=5, degree=3, include_bias=False)
+        # from sklearn.preprocessing import PolynomialFeatures
+        # transformer = PolynomialFeatures(degree=2, include_bias=False)
     elif featurizer_type == 'POLY':
         from sklearn.preprocessing import PolynomialFeatures
         transformer = PolynomialFeatures(degree=2, include_bias=False)
@@ -254,6 +257,8 @@ class DoseResponseMixin:
         baseline = getattr(self, 'baseline_t', 'q05')
         if baseline == 'q05':
             baseline = np.percentile(self.T_absolute, 5)
+        if baseline == 'mean':
+            baseline = np.mean(self.T_absolute)
             
         q5, q95 = np.percentile(self.T_absolute, [5, 95])
         t_grid = np.arange(np.ceil(q5), np.floor(q95) + 1, 1.0)
@@ -335,6 +340,8 @@ class DoseResponseMixin:
         baseline = getattr(self, 'baseline_t', 'q05')
         if baseline == 'q05':
             baseline = np.percentile(self.T_absolute, 5)
+        if baseline == 'mean':
+            baseline = np.mean(self.T_absolute)
             
         t_target_sandy = self.T_absolute
         t_target_nonsandy = self.T_absolute

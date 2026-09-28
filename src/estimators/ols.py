@@ -87,6 +87,16 @@ class BaseOLSEstimator(BaseEstimator):
                 p_value=self.est.pvalues[col_name], ci_lower=conf_ints.loc[col_name, 0], 
                 ci_upper=conf_ints.loc[col_name, 1], estimator_instance=self, count=count
             )
+            
+        # Marginalize soil groups if this is a complex estimator
+        for soil in ['Non-sandy', 'Sandy']:
+            if soil not in cates:
+                soil_subgroups = [g for g in cates if g.endswith(f"_{soil}")]
+                if soil_subgroups:
+                    soil_cates = {g: cates[g] for g in soil_subgroups}
+                    soil_weights = {g: cates[g].count for g in soil_subgroups}
+                    cates[soil] = _aggregate_cates_to_ate(soil_cates, self, weights=soil_weights)
+                    
         return cates
 
 class OLS_SOIL(BaseOLSEstimator):
@@ -94,7 +104,7 @@ class OLS_SOIL(BaseOLSEstimator):
     pass
 class OLS_SOIL_RATE(DoseResponseMixin, BaseOLSEstimator):
     """Ordinary Least Squares for heterogeneous effect by soil and continuous rate."""
-    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='mean', **kwargs):
         super().__init__(*args, **kwargs)
         self.featurizer_type = featurizer_type
         self.baseline_t = baseline_t
