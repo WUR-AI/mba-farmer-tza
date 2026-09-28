@@ -10,16 +10,18 @@ adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
 #estimators = ["DML_SOIL_RATE_SPLINE"]
 [experiments.MainDML.robustness]
-PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_RATE_SPLINE"]
+#PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_RATE_SPLINE"]
 #PlaceboTest = ["DML_SOIL_RATE_SPLINE"]
 #SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME"]
-#PreTreatmentPlacebo = ["DML_SOIL"]
+PreTreatmentPlacebo = ["DML_SOIL"]
 #UnobservedCommonConfounder = ["DML_SOIL", "DML_SOIL_RATE_SPLINE"]
 
 [experiments.MainOLS]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_TIME"]
+[experiments.MainOLS.robustness]
+PlaceboTest = ["OLS_SOIL_RATE_SPLINE"]
 
 [experiments.MainRF]
 dag = "main-rev.json"
@@ -30,6 +32,8 @@ estimators = ["RF_PREDICTIVE"]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["GPS_SOIL_RATE"]
+[experiments.MainGPS.robustness]
+PlaceboTest = ["GPS_SOIL_RATE"]
 
 [experiments.ExahustiveAdjDML]
 dag = "main-rev.json"

@@ -432,7 +432,11 @@ def plot_placebo_dose_response_curves(experiment_name, save_path):
         
     fig, axes = plt.subplots(2, 2, figsize=(5.5, 5.5), sharey='row')
     
-    estimator_name = 'DML_SOIL_RATE_SPLINE'
+    estimator_name = {
+        "MainDML":'DML_SOIL_RATE_SPLINE',
+        "MainGPS": "GPS_SOIL_RATE",
+        "MainOLS": "OLS_SOIL_RATE_SPLINE"
+    }[experiment_name]
     soil_types = ['Non-sandy', 'Sandy']
     
     for row, fertilizer in enumerate(['N', 'P']):
@@ -484,10 +488,10 @@ def plot_placebo_dose_response_curves(experiment_name, save_path):
                 ax.legend(frameon=False, loc='upper left')
                 
             if fertilizer == 'N':
-                ax.set_ylim(-500, 3400)
+                ax.set_ylim(-1990, 1990)
                 ax.set_xlim(35, 180)
             else:
-                ax.set_ylim(-500, 3400)
+                ax.set_ylim(-1990, 1990)
                 ax.set_xlim( 14, 52)
                 
     plt.tight_layout()
@@ -682,6 +686,40 @@ def generate_rpt_table(experiment_name, estimators, fertilizer='N'):
     
     print(df_res.to_markdown())
 
+def generate_ptpo_table(experiment_name, estimators, fertilizer='N'):
+    print(f"\n--- PTPO Results Table for {fertilizer}-{experiment_name} ---")
+    rows = []
+    
+    for est in estimators:
+        ptpo_csv = f"outputs/robustness/{fertilizer}-{experiment_name}/{est}_adj_1-PTPO_results.csv"
+        if not os.path.exists(ptpo_csv):
+            continue
+            
+        ptpo_df = pd.read_csv(ptpo_csv)
+        for _, row in ptpo_df.iterrows():
+            if row['Parameter'] == 'ATE':
+                rows.append({
+                    'Estimator': est,
+                    'Placebo Outcome': row['Placebo_Outcome'],
+                    'Parameter': row['Parameter'],
+                    'Effect': row['Value'],
+                    'SE': row['Std_Error'],
+                    'p-value': row['P_Value']
+                })
+            
+    if not rows:
+        # print("No PTPO data found.")
+        return
+        
+    df_res = pd.DataFrame(rows)
+    df_res = df_res.set_index(['Estimator', 'Placebo Outcome', 'Parameter'])
+    
+    df_res['Effect'] = df_res['Effect'].apply(lambda x: f"{x:.4f}" if pd.notnull(x) else "-")
+    df_res['SE'] = df_res['SE'].apply(lambda x: f"{x:.4f}" if pd.notnull(x) else "-")
+    df_res['p-value'] = df_res['p-value'].apply(lambda x: f"{x:.3f}" if pd.notnull(x) else "-")
+    
+    print(df_res.to_markdown())
+
 def parse_args():
     parser = argparse.ArgumentParser(description="MBA Tanzania - Plots and Tables Generator")
     return parser.parse_args()
@@ -711,9 +749,11 @@ def main():
             generate_point_estimates_table(exp, estimators, config_n, config_p)
             generate_alt_point_estimates_table(exp, estimators, config_n, config_p)
             
-            if "DML" in exp:
+            if exp in ["MainDML", "MainOLS", "MainGPS"]:
                 generate_rpt_table(exp, estimators, fertilizer='N')
                 generate_rpt_table(exp, estimators, fertilizer='P')
+                generate_ptpo_table(exp, estimators, fertilizer='N')
+                generate_ptpo_table(exp, estimators, fertilizer='P')
             
     # Example calls for the plots
     plot_soil_time_estimates("MainDML", "plots/publication/SOIL_TIME_MainDML.pdf")
@@ -723,7 +763,9 @@ def main():
     plot_dose_response_curves("MainDML", "plots/publication/DOSE_RESPONSE_MainDML.pdf")
     # plot_dose_response_curves("MainOLS", "plots/publication/DOSE_RESPONSE_MainOLS.pdf")
     plot_other_dose_response_curves("plots/publication/DOSE_RESPONSE_Other.pdf")
-    # plot_placebo_dose_response_curves("MainDML", "plots/publication/DOSE_RESPONSE_PLACEBO_MainDML.pdf")
+    plot_placebo_dose_response_curves("MainDML", "plots/publication/DOSE_RESPONSE_PLACEBO_MainDML.pdf")
+    plot_placebo_dose_response_curves("MainGPS", "plots/publication/DOSE_RESPONSE_PLACEBO_MainGPS.pdf")
+    plot_placebo_dose_response_curves("MainOLS", "plots/publication/DOSE_RESPONSE_PLACEBO_MainOLS.pdf")
     # 
 
 if __name__ == "__main__":

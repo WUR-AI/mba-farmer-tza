@@ -392,7 +392,7 @@ class DoseResponseMixin:
         
         # High Non-Return Point via Parametric Bootstrap
         try:
-            np.random.seed(42)
+            rng = np.random.default_rng(42)
             n_sims = 10000
             param_vals = param.values if hasattr(param, 'values') else np.array(param)
             cov_vals = param_cov_matrix.values if hasattr(param_cov_matrix, 'values') else np.array(param_cov_matrix)
@@ -400,7 +400,7 @@ class DoseResponseMixin:
             # Ensure it is symmetric positive semi-definite
             cov_vals = (cov_vals + cov_vals.T) / 2
             
-            simulated_params = np.random.multivariate_normal(param_vals, cov_vals, size=n_sims)
+            simulated_params = rng.multivariate_normal(param_vals, cov_vals, size=n_sims)
             
             q95 = np.percentile(self.T_absolute, 95)
             q50 = np.percentile(self.T_absolute, 50) # I expect the non-return rate to be on the upper end of the curve

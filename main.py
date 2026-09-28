@@ -353,7 +353,7 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                     print("Running Random Placebo Treatment (RPT)...")
                     EstimatorClass = get_estimator(estimator_name)
                     ate_df, cate_df, dose_results = run_random_placebo_treatment(
-                        N_PLACEBO_RUNS=10, estimator_name=estimator_name, EstimatorClass=EstimatorClass,
+                        N_PLACEBO_RUNS=100, estimator_name=estimator_name, EstimatorClass=EstimatorClass,
                         current_data=current_data, raw_data=raw_data, adjustment_set=adjustment_set,
                         treatment_node=treatment_node, outcome_node=outcome_node, outcome_var=outcome_var,
                         treatment_var=treatment_var, random_seed=random_seed, shared_model_y=None,
@@ -394,7 +394,7 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                         print(f"Warning: No PTPO nodes found for {treatment_node} in config/ptpo_nodes.json")
                     
                     pre_treatment_vars = [v for node in causal_ancestor_nodes for v in node_variable_map.get(node, [])]
-                    pre_treatment_vars = [v for v in pre_treatment_vars if v in current_data.columns and ("season" not in v or v.startswith("0to100"))]
+                    pre_treatment_vars = [v for v in pre_treatment_vars if v in data.columns and ("season" not in v or v.startswith("0to100"))]
                     
                     ptpo_df = run_pretreatment_placebo_outcome(
                         pre_treatment_vars=pre_treatment_vars, estimator_name=estimator_name, EstimatorClass=EstimatorClass,

@@ -24,8 +24,9 @@ def run_random_placebo_treatment(
     dose_results = []
     
     for i in tqdm(range(N_PLACEBO_RUNS), desc=f"RPT: {estimator_name}"):
+        rng = np.random.default_rng(random_seed + i)
         placebo_data = current_data.copy()
-        placebo_data[treatment_var] = np.random.choice(
+        placebo_data[treatment_var] = rng.choice(
             current_data[treatment_var], size=len(current_data), replace=True
         )
         
@@ -106,10 +107,16 @@ def run_pretreatment_placebo_outcome(
     results = []
     
     for placebo_var in tqdm(pre_treatment_vars, desc=f"PTPO: {estimator_name}"):
-        if placebo_var not in current_data.columns:
+        if placebo_var not in raw_data.columns:
             continue
             
         placebo_data = current_data.copy()
+        
+        # Add the placebo outcome variable if it isn't in current_data already
+        if placebo_var not in placebo_data.columns:
+            placebo_data[placebo_var] = raw_data.loc[placebo_data.index, placebo_var]
+            
+        placebo_data = placebo_data.dropna(subset=[placebo_var])
         
         # To prevent feature leakage, we must explicitly drop the placebo variable 
         # from raw_data so that get_feature_lists doesn't add it back into X or W.
