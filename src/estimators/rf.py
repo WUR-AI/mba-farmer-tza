@@ -98,7 +98,7 @@ class RF_PREDICTIVE(BaseEstimator):
         effect_i = [f̂(W_i, T_i) - f̂(W_i, t_baseline)] / (T_i - t_baseline)
         averaged across observations, with SE from per-tree variance.
         """
-        t_baseline = np.mean(self.T_absolute)
+        t_baseline = np.percentile(self.T_absolute, 5)
         
         # Dose above baseline for each farmer
         dose = self.T_absolute - t_baseline
@@ -180,7 +180,7 @@ class RF_PREDICTIVE(BaseEstimator):
         For each t in the grid, replace all farmers' treatment with t,
         predict, and average within each soil group. Report lift from baseline.
         """
-        t_baseline = np.mean(self.T_absolute)
+        t_baseline = np.percentile(self.T_absolute, 5)
         q5, q95 = np.percentile(self.T_absolute, [5, 95])
         t_grid = np.arange(np.ceil(q5), np.floor(q95) + 1, 1.0)
         

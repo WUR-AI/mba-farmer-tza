@@ -21,6 +21,14 @@ from .rf import RF_PREDICTIVE
 from .gps import GPS_SOIL_RATE
 
 def get_estimator(name: str):
+    suffixes = ['_GB']
+    
+    base_name = name
+    for suffix in suffixes:
+        if name.endswith(suffix):
+            base_name = name[:-len(suffix)]
+            break
+            
     estimators = {
         'DML_SOIL': DML_SOIL,
         'DML_SOIL_RATE': DML_SOIL_RATE,
@@ -39,6 +47,8 @@ def get_estimator(name: str):
         'RF_PREDICTIVE': RF_PREDICTIVE,
         'GPS_SOIL_RATE': GPS_SOIL_RATE
     }
-    if name not in estimators:
-        raise ValueError(f"Estimator {name} is not implemented.")
-    return estimators[name]
+    
+    if base_name not in estimators:
+        raise ValueError(f"Estimator {base_name} is not implemented.")
+        
+    return estimators[base_name]

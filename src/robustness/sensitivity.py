@@ -4,10 +4,11 @@ import re
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 
-def compute_ucc_sensitivity(estimate, se, count, grid_cd=None, grid_cy=None, rho=1.0, alpha=0.05, benchmark_covariates=None):
+def compute_ucc_sensitivity(estimator_instance, estimate, se, count, grid_cd=None, grid_cy=None, rho=1.0, alpha=0.05, benchmark_covariates=None):
     """
     Computes sensitivity bounds for Unobserved Common Confounder (UCC).
-    Formula: Bias = rho * sqrt((cy * cd) / (1 - cd)) * SE * sqrt(df)
+    It uses Chernozhukov's method to compute upper bounds on the bias of the estimator
+    as implement by EconML
     """
     if grid_cd is None:
         grid_cd = np.linspace(0.0, 0.5, 50)
@@ -16,24 +17,30 @@ def compute_ucc_sensitivity(estimate, se, count, grid_cd=None, grid_cy=None, rho
         
     cd_mesh, cy_mesh = np.meshgrid(grid_cd, grid_cy)
     
-    # df approximation for DML
-    df = count
+    adj_estimate = np.zeros_like(cd_mesh)
+    ci_lower = np.zeros_like(cd_mesh)
+    ci_upper = np.zeros_like(cd_mesh)
     
-    # Calculate Bias
-    # To avoid division by zero when cd=1.0, we use np.clip
-    cd_clipped = np.clip(cd_mesh, 0, 0.999)
-    bias = rho * np.sqrt((cy_mesh * cd_clipped) / (1 - cd_clipped)) * se * np.sqrt(df)
-    
-    adj_estimate = estimate - bias
-    
-    # Calculate confidence limits
-    # The standard error is rescaled in rigorous implementations, but the first-order approximation
-    # just shifts the point estimate.
-    import scipy.stats as stats
-    z = stats.norm.ppf(1 - alpha / 2)
-    
-    ci_lower = adj_estimate - z * se
-    ci_upper = adj_estimate + z * se
+    # Iterate over the grid because EconML's sensitivity_interval does not support vectorized c_y and c_t
+    rows, cols = cd_mesh.shape
+    for i in range(rows):
+        for j in range(cols):
+            c_d_val = cd_mesh[i, j]
+            c_y_val = cy_mesh[i, j]
+            
+            # Point estimate bounds
+            lb_theta, _ = estimator_instance.est.sensitivity_interval(
+                c_y=c_y_val, c_t=c_d_val, rho=rho, alpha=alpha, interval_type='theta'
+            )
+            # CI bounds
+            lb_ci, ub_ci = estimator_instance.est.sensitivity_interval(
+                c_y=c_y_val, c_t=c_d_val, rho=rho, alpha=alpha, interval_type='ci'
+            )
+            
+            # For rho=1.0 and positive estimate, lb_theta is the conservative shrink towards zero.
+            adj_estimate[i, j] = lb_theta
+            ci_lower[i, j] = lb_ci
+            ci_upper[i, j] = ub_ci
     
     return {
         'grid_cd': cd_mesh,

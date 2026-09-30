@@ -170,7 +170,7 @@ class DML_SOIL(BaseDMLEstimator):
     pass
 class DML_SOIL_RATE(DoseResponseMixin, BaseDMLEstimator):
     """Heterogeneous effect (response curve) varying by soil type."""
-    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='mean', **kwargs):
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
         super().__init__(*args, **kwargs)
         self.featurizer_type = featurizer_type
         self.baseline_t = baseline_t

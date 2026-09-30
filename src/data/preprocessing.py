@@ -183,6 +183,7 @@ def clean_raw_data(data, data_ranges):
         data[f'KG{element}total_ha'] = \
             data[[f'KG{element}basal_ha']+[f'KG{element}top{i}_ha' for i in range(1,4)]].sum(axis=1, skipna=False)
 
+
     # Set to NaN every continuous value outside the range defined in data_ranges
     for col, bounds in data_ranges.items():
         min_val = bounds.get('min')

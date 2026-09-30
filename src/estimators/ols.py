@@ -104,7 +104,7 @@ class OLS_SOIL(BaseOLSEstimator):
     pass
 class OLS_SOIL_RATE(DoseResponseMixin, BaseOLSEstimator):
     """Ordinary Least Squares for heterogeneous effect by soil and continuous rate."""
-    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='mean', **kwargs):
+    def __init__(self, *args, featurizer_type='SPLINE', baseline_t='q05', **kwargs):
         super().__init__(*args, **kwargs)
         self.featurizer_type = featurizer_type
         self.baseline_t = baseline_t

@@ -133,7 +133,7 @@ class GPS_SOIL_RATE(BaseEstimator):
         return mu_overall, mu_0, mu_1
 
     def estimate_dose_response(self):
-        baseline_t = np.mean(self.T)
+        baseline_t = np.percentile(self.T, 5)
         q5, q95 = np.percentile(self.T, [5, 95])
         t_eval = np.arange(np.ceil(q5), np.floor(q95) + 1, 1.0)
         

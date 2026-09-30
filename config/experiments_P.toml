@@ -13,8 +13,8 @@ estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
 #PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_RATE_SPLINE"]
 #PlaceboTest = ["DML_SOIL_RATE_SPLINE"]
 #SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME"]
-PreTreatmentPlacebo = ["DML_SOIL"]
-#UnobservedCommonConfounder = ["DML_SOIL", "DML_SOIL_RATE_SPLINE"]
+#PreTreatmentPlacebo = ["DML_SOIL"]
+UnobservedCommonConfounder = ["DML_SOIL"]
 
 [experiments.MainOLS]
 dag = "main-rev.json"
@@ -38,7 +38,8 @@ PlaceboTest = ["GPS_SOIL_RATE"]
 [experiments.ExahustiveAdjDML]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
-estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+#estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+estimators = ["DML_SOIL_RATE_SPLINE"]
 
 [experiments.NtoPDML]
 dag = "n-to-p.json"

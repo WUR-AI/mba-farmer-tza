@@ -39,11 +39,16 @@ def fit_estimator(
         cv=5
     )
     
-    # We pass the default RF models if not already fitted
+    # We pass the default models if not already fitted
     if getattr(model, 'model_y', None) is None:
-        from sklearn.ensemble import RandomForestRegressor
-        model.model_y = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
-        model.model_t = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
+        if estimator_name.endswith('_GB'):
+            from sklearn.ensemble import GradientBoostingRegressor
+            model.model_y = GradientBoostingRegressor(random_state=random_seed, max_depth=3)
+            model.model_t = GradientBoostingRegressor(random_state=random_seed, max_depth=3)
+        else:
+            from sklearn.ensemble import RandomForestRegressor
+            model.model_y = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
+            model.model_t = RandomForestRegressor(random_state=random_seed, n_jobs=-1, max_depth=3)
         model.is_first_pass = True
     else:
         model.is_first_pass = False

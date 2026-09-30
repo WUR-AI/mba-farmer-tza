@@ -1,0 +1,10 @@
+figures
+models
+.vscode 
+.ipynb_checkpoints
+__pycache__
+*.pyc
+outputs/
+outputs_backup/
+./plots/
+venv/

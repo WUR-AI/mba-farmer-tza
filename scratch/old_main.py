@@ -12,7 +12,7 @@ from src.estimators import get_estimator
 from src.plots.diagnostics import plot_gps_support
 from src.plots.estimates import plot_dose_response_curve, plot_average_marginal_effect, plot_point_estimates, plot_ucc_contours
 from src.estimators.base import fit_estimator
-from src.robustness.sensitivity import run_sensitivity_analysis, compute_ucc_sensitivity, estimate_empirical_benchmarks
+from src.robustness.sensitivity import run_sensitivity_analysis, compute_ucc_sensitivity
 from src.robustness.placebo import run_random_placebo_treatment, run_pretreatment_placebo_outcome
 import geopandas as gpd
 
@@ -65,11 +65,16 @@ def run_identification(dag_path, treatment_node, outcome_node, conditional_nodes
         edges_list = json.load(f)
     assert set([treatment_node, outcome_node]+conditional_nodes).issubset({item for sublist in edges_list for item in sublist})
     
-    adjustment_set = identify_adjustment_set(edges_list, treatment_node, outcome_node, adj_set_type, conditional_nodes)
-    os.makedirs(os.path.dirname(adj_cache_path), exist_ok=True)
-    with open(adj_cache_path, 'w') as f:
-        json.dump(adjustment_set, f, indent=4)
-    print(f"Saved adjustment set to {adj_cache_path}")
+    if os.path.exists(adj_cache_path):
+        print(f"Loading adjustment set from {adj_cache_path}...")
+        with open(adj_cache_path, 'r') as f:
+            adjustment_set = json.load(f)
+    else:
+        adjustment_set = identify_adjustment_set(edges_list, treatment_node, outcome_node, adj_set_type, conditional_nodes)
+        os.makedirs(os.path.dirname(adj_cache_path), exist_ok=True)
+        with open(adj_cache_path, 'w') as f:
+            json.dump(adjustment_set, f, indent=4)
+        print(f"Saved adjustment set to {adj_cache_path}")
         
     print("Adjustment Set:")
     print(adjustment_set)
@@ -92,28 +97,6 @@ def load_experiment_data(data_path, data_version, treatment_var, outcome_var, no
     data = data[data[treatment_var] > 0]
     data = data.dropna(subset=[outcome_var, treatment_var])
     coords = raw_data.loc[data.index, ['lat', 'lon']].copy()
-    
-    SPATIAL_DEMEAN = False
-    SPATIAL_DEMEAN_CONTROLS = False
-    
-    if SPATIAL_DEMEAN:
-        data, coords = spatial_demean_data(data, coords, variables=[outcome_var, treatment_var])
-        
-    if SPATIAL_DEMEAN_CONTROLS:
-        spatial_control_nodes = ['soil', 'weatherSeason']
-        spatial_control_vars = []
-        for node in spatial_control_nodes:
-            if node in node_variable_map:
-                spatial_control_vars.extend(node_variable_map[node])
-        
-        spatial_continuous_vars = [
-            v for v in spatial_control_vars 
-            if v in data.columns and pd.api.types.is_numeric_dtype(data[v]) and data[v].nunique() > 2
-        ]
-        
-        if len(spatial_continuous_vars) > 0:
-            data, coords = spatial_demean_data(data, coords, variables=spatial_continuous_vars)
-            
     points = gpd.GeoSeries(gpd.points_from_xy(coords['lon'], coords['lat'], crs='EPSG:32736'), index=coords.index)
     
     return data, raw_data, coords, points
@@ -335,21 +318,9 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                                         print(f"Skipping UCC for {group} due to missing count")
                                         continue
                                         
-                                    if group != 'ATE':
-                                        print(f"Skipping UCC for {group}")
-                                        continue
-
-                                    if 'benchmarks' not in locals():
-                                        benchmarks = estimate_empirical_benchmarks(
-                                            data=current_data, outcome_var=outcome_var,
-                                            treatment_var=treatment_var, node_variable_map=node_variable_map,
-                                            adjustment_set=adjustment_set, random_state=random_seed
-                                        )
-                                        
                                     ucc_data = compute_ucc_sensitivity(
-                                        estimator_instance=model,
                                         estimate=estimate_obj.value, se=estimate_obj.std_error,
-                                        count=estimate_obj.count, benchmark_covariates=benchmarks
+                                        count=estimate_obj.count, benchmark_covariates=None
                                     )
                                     safe_group = group.replace(' ', '_').replace('/', '_').replace(':', '_')
                                     ucc_data_path = f"{robustness_dir}/{estimator_name}{suffix}_{safe_group}-ucc_data.pkl"
@@ -397,16 +368,13 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                 if estimator_name in robustness_tests.get("PreTreatmentPlacebo", []):
                     print("Running Pre-treatment Placebo Outcome (PTPO)...")
                     EstimatorClass = get_estimator(estimator_name)
-                    # Read pre-treatment nodes from ptpo_nodes.json
-                    with open("config/ptpo_nodes.json", "r") as f:
-                        ptpo_nodes_map = json.load(f)
-                    
-                    causal_ancestor_nodes = ptpo_nodes_map.get(treatment_node, [])
-                    if not causal_ancestor_nodes:
-                        print(f"Warning: No PTPO nodes found for {treatment_node} in config/ptpo_nodes.json")
+                    dag_path = os.path.join("config", "dags", exp_config.get('dag'))
+                    with open(dag_path, 'r') as f:
+                        dag_edges = json.load(f)
+                    causal_ancestor_nodes = [edge[0] for edge in dag_edges if edge[1] == treatment_node]
                     
                     pre_treatment_vars = [v for node in causal_ancestor_nodes for v in node_variable_map.get(node, [])]
-                    pre_treatment_vars = [v for v in pre_treatment_vars if v in data.columns and ("season" not in v or v.startswith("0to100"))]
+                    pre_treatment_vars = [v for v in pre_treatment_vars if v in current_data.columns and ("season" not in v or v.startswith("0to100"))]
                     
                     ptpo_df = run_pretreatment_placebo_outcome(
                         pre_treatment_vars=pre_treatment_vars, estimator_name=estimator_name, EstimatorClass=EstimatorClass,
