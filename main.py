@@ -361,6 +361,59 @@ def run_robustness(args, exp_config, global_config, data, raw_data, points, adju
                     except Exception as e:
                         print(f"Failed to run UCC Sensitivity Analysis for {estimator_name} {suffix}: {e}")
                     
+                if estimator_name in robustness_tests.get("SensitivityDose", []) and "RATE" in estimator_name:
+                    print("Running Dose Response Sensitivity Analysis (SensitivityDose)...")
+                    try:
+                        from src.robustness.sensitivity import run_sensitivity_dose
+                        EstimatorClass = get_estimator(estimator_name)
+                        dose_sens_results = run_sensitivity_dose(
+                            estimator_name=estimator_name,
+                            EstimatorClass=EstimatorClass,
+                            current_data=current_data,
+                            raw_data=raw_data,
+                            adjustment_set=adjustment_set,
+                            treatment_node=treatment_node,
+                            outcome_node=outcome_node,
+                            outcome_var=outcome_var,
+                            treatment_var=treatment_var,
+                            node_variable_map=node_variable_map,
+                            random_seed=random_seed,
+                            points=points
+                        )
+                        
+                        summary_records = []
+                        for u_name, res in dose_sens_results.items():
+                            csv_path = f"{robustness_dir}/{estimator_name}{suffix}-{u_name}-dose_response.csv"
+                            res['dose_response'].to_csv(csv_path)
+                            
+                            causal_recs = []
+                            ate = res['ate']
+                            causal_recs.append({
+                                'Parameter': 'ATE', 'Mean Value': ate.value, 'Std Error': ate.std_error,
+                                'P-Value': ate.p_value, 'CI Lower': ate.ci_lower, 'CI Upper': ate.ci_upper, 'Count': ate.count
+                            })
+                            if isinstance(res['cate'], dict):
+                                for group, cate in res['cate'].items():
+                                    causal_recs.append({
+                                        'Parameter': f"CATE: {group}", 'Mean Value': cate.value, 'Std Error': cate.std_error,
+                                        'P-Value': cate.p_value, 'CI Lower': cate.ci_lower, 'CI Upper': cate.ci_upper, 'Count': cate.count
+                                    })
+                            pd.DataFrame(causal_recs).to_csv(f"{robustness_dir}/{estimator_name}{suffix}-{u_name}-causal_estimates.csv", index=False)
+                            
+                            summary_records.append({
+                                'Estimator': estimator_name,
+                                'Adj_Set': i+1,
+                                'Simulated_U': u_name,
+                                'Partial_R2_T': res['cd'],
+                                'Partial_R2_Y': res['cy']
+                            })
+                            print(f"Saved SensitivityDose results for {u_name} to {robustness_dir}")
+                        
+                        if summary_records:
+                            pd.DataFrame(summary_records).to_csv(f"{robustness_dir}/{estimator_name}{suffix}-SensitivityDose_summary.csv", index=False)
+                    except Exception as e:
+                        print(f"Failed to run SensitivityDose for {estimator_name} {suffix}: {e}")
+                    
                 if estimator_name in robustness_tests.get("PlaceboTest", []):
                     print("Running Random Placebo Treatment (RPT)...")
                     EstimatorClass = get_estimator(estimator_name)
