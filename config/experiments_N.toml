@@ -13,8 +13,9 @@ estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME", "DML_SOIL_LEG
 #PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT", "DML_SOIL_RATE_SPLINE"]
 #PlaceboTest = ["DML_SOIL_RATE_SPLINE"]
 #SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
-#PreTreatmentPlacebo = ["DML_SOIL"]
-UnobservedCommonConfounder = ["DML_SOIL"]
+PreTreatmentPlacebo = ["DML_SOIL"]
+#UnobservedCommonConfounder = ["DML_SOIL"]
+#SensitivityDose = ["DML_SOIL_RATE_SPLINE"]
 
 [experiments.MainOLS]
 dag = "main-rev.json"
@@ -34,6 +35,7 @@ adjustment_set = "BACKDOOR_EFFICIENT"
 estimators = ["GPS_SOIL_RATE"]
 [experiments.MainGPS.robustness]
 PlaceboTest = ["GPS_SOIL_RATE"]
+SensitivityDose = ["GPS_SOIL_RATE"]
 
 [experiments.ExahustiveAdjDML]
 dag = "main-rev.json"
@@ -45,3 +47,43 @@ estimators = ["DML_SOIL_RATE_SPLINE"]
 dag = "main-rev.json"
 adjustment_set = "BACKDOOR_EXHAUSTIVE"
 estimators = ["OLS_SOIL", "OLS_SOIL_RATE_SPLINE", "OLS_SOIL_TIME", "OLS_SOIL_LEGUME", "OLS_SOIL_PFERT"]
+
+[experiments.MainDMLGB]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL_GB", "DML_SOIL_RATE_SPLINE_GB", "DML_SOIL_TIME_GB", "DML_SOIL_LEGUME_GB", "DML_SOIL_PFERT_GB"]
+#estimators = ["DML_SOIL_RATE_SPLINE"]
+[experiments.MainDMLGB.robustness]
+#PlaceboTest = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT", "DML_SOIL_RATE_SPLINE"]
+#PlaceboTest = ["DML_SOIL_RATE_SPLINE"]
+#SensitivityAnalysis = ["DML_SOIL", "DML_SOIL_TIME", "DML_SOIL_LEGUME", "DML_SOIL_PFERT"]
+PreTreatmentPlacebo = ["DML_SOIL_GB"]
+#UnobservedCommonConfounder = ["DML_SOIL_GB"]
+
+
+[experiments.MaxAdjDML]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_MAX"
+estimators = ["DML_SOIL"]
+[experiments.MaxAdjDML.robustness]
+PreTreatmentPlacebo = ["DML_SOIL"]
+
+[experiments.NtoPDML]
+dag = "n-to-p.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+
+[experiments.Var2fertDML]
+dag = "var2fert.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+
+[experiments.OtherMan2fertDML]
+dag = "otherMan-N.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL", "DML_SOIL_RATE_SPLINE", "DML_SOIL_TIME"]
+
+[experiments.MainDMLZero]
+dag = "main-rev.json"
+adjustment_set = "BACKDOOR_EFFICIENT"
+estimators = ["DML_SOIL"]

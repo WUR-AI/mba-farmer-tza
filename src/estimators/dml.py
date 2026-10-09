@@ -27,7 +27,7 @@ class BaseDMLEstimator(BaseEstimator):
             X_het, x_names_het = self.heterogeneity_builder(transformed_data, treatment_name=treatment_name)
         else:
             X_het, x_names_het = None, []
-
+            
         cols_to_drop = ['soil_sandy'] + self.heterogeneity_drop_cols
         if self.heterogeneity_builder:
             cols_to_drop += x_names_het

@@ -69,10 +69,10 @@ def plot_gps_support(diagnostics, transformed_data, raw_data, treatment_var, fer
         ax.set_facecolor('none')
         ax.tick_params(length=0)
 
-    g.axes.flat[0].text(
-        0, 1, 'a', transform=g.axes.flat[0].transAxes, va='center', ha='center', fontsize=8,
-        fontweight='bold', bbox=dict(boxstyle='circle', fc='w', ec='k')
-    )
+    # g.axes.flat[0].text(
+    #     0, 1, 'a', transform=g.axes.flat[0].transAxes, va='center', ha='center', fontsize=8,
+    #     fontweight='bold', bbox=dict(boxstyle='circle', fc='w', ec='k')
+    # )
     
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)

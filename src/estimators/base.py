@@ -60,7 +60,7 @@ def fit_estimator(
     kwargs = {}
     if 'SOIL_RATE' in estimator_name and points is not None:
         kwargs['points'] = points.loc[current_data.index]
-
+    
     current_data, shared_model_y, shared_model_t = model.fit(
         data=current_data, 
         transformed_data=current_transformed_data_subset, 

@@ -35,7 +35,7 @@ def generate_data(n_samples=1500, random_state=42):
     # a = 4000*np.ones_like(x1)
     
     # c: curvature
-    c = 0.015
+    c = 0.015 + x5 *0.006
 
     # b: soil inherent nutrient, y0: baseline fertility
     y0 = 2000 + 500 * x5
@@ -62,7 +62,7 @@ def fit_dml(X, T, Y):
     """
     Fits the DML_RATE estimator (mimicking DML_SOIL_RATE_SPLINE structure without soil).
     """
-    spline = SplineTransformer(degree=3, n_knots=3, include_bias=False)
+    spline = SplineTransformer(degree=3, n_knots=5, include_bias=False)
     
     model_y = RandomForestRegressor(random_state=42, n_jobs=-1, max_depth=5)
     model_t = MultiOutputRegressor(RandomForestRegressor(random_state=42, n_jobs=-1, max_depth=5))
@@ -132,7 +132,7 @@ def main():
     # exit()
 
     t_ref_val = np.percentile(T, 5)
-    # t_ref_val = 0
+    t_ref_val = 0
     t_eval = np.linspace(t_ref_val, np.percentile(T, 95), 50)
     t_ref = np.full_like(t_eval, t_ref_val)
     
@@ -145,7 +145,7 @@ def main():
     
     scenarios = [
         ('x5', r'Increases baseline yield'),
-        ('x1', r'Decreases potential yield'),
+        # ('x1', r'Decreases potential yield'),
         # ('x3', r'$\rho = 0$ (Instrumental Variable)')
     ]
     
@@ -154,10 +154,10 @@ def main():
     
     # Panel 1: Ground Truth vs Fully Adjusted
     # ax = axes[0]
-    ax.plot(t_eval, true_dr, '-', color="grey", linewidth=3, label='Ground Truth')
+    # ax.plot(t_eval, true_dr, '-', color="grey", linewidth=4, alpha=.5, label='Ground Truth')
     ax.plot(t_eval, dr_full, 'r--', linewidth=2, label='No UCC')
-    ax.set_xlabel("N-rate (T)")
-    ax.set_ylabel("Yield increase compared to\nreference nutrient rate")
+    ax.set_xlabel("N-rate (kg/ha)")
+    ax.set_ylabel("Yield increase compared to\nreference nutrient rate (kg/ha)")
     ax.legend(frameon=False)
     
     for i, (var, title) in enumerate(scenarios):
@@ -172,7 +172,7 @@ def main():
         dr_dropped = np.ravel(est_dropped.effect(T0=t_ref.reshape(-1, 1), T1=t_eval.reshape(-1, 1)))
         
         ax.plot(
-            t_eval, dr_dropped, color=['b', 'k'][i], linestyle=["--", ":"][i], linewidth=2, 
+            t_eval, dr_dropped, color=['b', 'k'][i], linestyle=[":", "-."][i], linewidth=2, 
             label=f"UCC: $c_d={cd*100:.1f}$%, $c_y={cy*100:.1f}$%"
         )
         
